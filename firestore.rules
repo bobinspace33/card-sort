@@ -21,6 +21,7 @@ service cloud.firestore {
     //   - checkAnswers: boolean (required)
     //   - showScore: boolean (required)
     //   - backgroundImage: string (optional, max 2000 chars, URL — may be empty)
+    //   - studentCode: string (optional on legacy docs; if present, exactly 6 chars A–Z / 0–9)
     //   - ownerId: string (required, immutable)
     //   - createdAt: timestamp (required, immutable)
     //
@@ -66,10 +67,18 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
 
+    function optionalStudentCodeOk() {
+      let data = request.resource.data;
+      return !data.keys().hasAny(['studentCode']) ||
+        (data.studentCode is string &&
+         data.studentCode.size() == 6 &&
+         data.studentCode.matches('^[A-Z0-9]{6}$'));
+    }
+
     function isValidActivity() {
       let data = request.resource.data;
       return hasRequiredFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt', 'backgroundImage']) &&
-             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'backgroundImage', 'ownerId', 'createdAt']) &&
+             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'backgroundImage', 'ownerId', 'createdAt', 'studentCode']) &&
              isValidString(data.title, 1, 100) &&
              data.categories is list && data.categories.size() <= 20 &&
              data.cards is list && data.cards.size() <= 100 &&
@@ -77,7 +86,8 @@ service cloud.firestore {
              data.showScore is bool &&
              data.backgroundImage is string && data.backgroundImage.size() <= 2000 &&
              data.ownerId is string &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             optionalStudentCodeOk();
     }
 
     function isValidResponse() {

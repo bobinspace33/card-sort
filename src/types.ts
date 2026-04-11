@@ -16,6 +16,8 @@ export interface Activity {
   showScore: boolean;
   /** Optional URL; shown behind the student activity UI at 30% opacity. */
   backgroundImage?: string;
+  /** Six-character code for students to open `/` → Student Code (optional on legacy activities). */
+  studentCode?: string;
   ownerId: string;
   createdAt: any;
 }

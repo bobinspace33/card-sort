@@ -4,6 +4,8 @@ import { auth, db, storage } from '../firebase';
 import { collection, addDoc, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, type UploadMetadata } from 'firebase/storage';
 import { CardData } from '../types';
+import { EDITOR_PATH } from '../lib/paths';
+import { allocateUniqueStudentCode } from '../lib/studentCode';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,8 @@ export default function CreateActivity() {
   /** Firestore fields that must stay unchanged on update (see firestore.rules). */
   const [editCreatedAt, setEditCreatedAt] = useState<unknown>(null);
   const [editOwnerId, setEditOwnerId] = useState<string | null>(null);
+  /** Shown when editing; assigned on first save if missing (legacy activities). */
+  const [studentCode, setStudentCode] = useState('');
   const [bootstrapping, setBootstrapping] = useState(isEditMode);
 
   const MAX_CARDS = 100;
@@ -50,20 +54,20 @@ export default function CreateActivity() {
         const user = auth.currentUser;
         if (!user) {
           toast.error('Sign in to edit activities');
-          navigate('/', { replace: true });
+          navigate(EDITOR_PATH, { replace: true });
           return;
         }
         const snap = await getDoc(doc(db, 'activities', activityId));
         if (cancelled) return;
         if (!snap.exists()) {
           toast.error('Activity not found');
-          navigate('/', { replace: true });
+          navigate(EDITOR_PATH, { replace: true });
           return;
         }
         const data = snap.data();
         if (data.ownerId !== user.uid) {
           toast.error('You can only edit your own activities');
-          navigate('/', { replace: true });
+          navigate(EDITOR_PATH, { replace: true });
           return;
         }
         setTitle(typeof data.title === 'string' ? data.title : '');
@@ -86,10 +90,12 @@ export default function CreateActivity() {
         setBackgroundImage(typeof data.backgroundImage === 'string' ? data.backgroundImage : '');
         setEditCreatedAt(data.createdAt);
         setEditOwnerId(typeof data.ownerId === 'string' ? data.ownerId : null);
+        const sc = data.studentCode;
+        setStudentCode(typeof sc === 'string' && /^[A-Z0-9]{6}$/i.test(sc) ? sc.toUpperCase() : '');
       } catch (e) {
         console.error('Load activity for edit:', e);
         toast.error('Could not load activity');
-        navigate('/', { replace: true });
+        navigate(EDITOR_PATH, { replace: true });
       } finally {
         if (!cancelled) setBootstrapping(false);
       }
@@ -259,6 +265,11 @@ export default function CreateActivity() {
           toast.error('Activity is still loading — try again in a moment');
           return;
         }
+        let sc = studentCode.trim().toUpperCase();
+        if (!/^[A-Z0-9]{6}$/.test(sc)) {
+          sc = await allocateUniqueStudentCode(db);
+          setStudentCode(sc);
+        }
         await updateDoc(doc(db, 'activities', activityId), {
           title,
           categories,
@@ -268,12 +279,14 @@ export default function CreateActivity() {
           backgroundImage: backgroundImage.trim(),
           ownerId: editOwnerId,
           createdAt: editCreatedAt,
+          studentCode: sc,
         });
         toast.success('Activity updated');
-        navigate('/', { replace: true });
+        navigate(EDITOR_PATH, { replace: true });
         return;
       }
 
+      const scNew = await allocateUniqueStudentCode(db);
       const docRef = await addDoc(collection(db, 'activities'), {
         title,
         categories,
@@ -283,8 +296,12 @@ export default function CreateActivity() {
         backgroundImage: backgroundImage.trim(),
         ownerId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
+        studentCode: scNew,
       });
-      navigate('/', { replace: true, state: { createdActivityId: docRef.id } });
+      navigate(EDITOR_PATH, {
+        replace: true,
+        state: { createdActivityId: docRef.id, createdStudentCode: scNew },
+      });
     } catch (error) {
       console.error(isEditMode ? 'Update activity:' : 'Create activity:', error);
       toast.error(
@@ -307,7 +324,7 @@ export default function CreateActivity() {
   return (
     <div className="max-w-4xl mx-auto p-6 md:p-12">
       <div className="flex items-center mb-8">
-        <Button variant="ghost" onClick={() => navigate('/')} className="mr-4 rounded-full w-10 h-10 p-0">
+        <Button variant="ghost" onClick={() => navigate(EDITOR_PATH)} className="mr-4 rounded-full w-10 h-10 p-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-3xl font-bold text-emerald-900">{isEditMode ? 'Edit Card Sort' : 'Create Card Sort'}</h1>
@@ -329,6 +346,22 @@ export default function CreateActivity() {
                 className="rounded-xl"
               />
             </div>
+
+            {isEditMode ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                <Label className="text-emerald-900">Student code</Label>
+                <p className="mt-1 font-mono text-xl font-semibold tracking-widest text-emerald-800">
+                  {studentCode || '— will be assigned when you save —'}
+                </p>
+                <p className="mt-1 text-xs text-emerald-700/80">
+                  Students enter this on the home page under Student Code (6 characters).
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                A unique 6-character student code is created when you save. Students can use it on the home page instead of a link.
+              </p>
+            )}
 
             <div className="space-y-2">
               <Label>Background image (optional)</Label>

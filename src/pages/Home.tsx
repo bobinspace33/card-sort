@@ -7,7 +7,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Activity } from '../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, BarChart, Play, Link2, Pencil } from 'lucide-react';
+import { Plus, BarChart, Play, Link2, Pencil, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPublicPlayUrl } from '../lib/activityUrls';
 import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
@@ -30,19 +30,31 @@ export default function Home() {
   const loading = !authReady;
 
   useEffect(() => {
-    const createdId = (location.state as { createdActivityId?: string } | null)?.createdActivityId;
+    const st = location.state as { createdActivityId?: string; createdStudentCode?: string } | null;
+    const createdId = st?.createdActivityId;
     if (!createdId) return;
     const url = getPublicPlayUrl(createdId);
+    const code = st?.createdStudentCode;
     toast.success('Activity created', {
-      description: 'Share this student link (participants should not use the facilitator dashboard).',
-      action: {
-        label: 'Copy student link',
-        onClick: () => {
-          void navigator.clipboard.writeText(url);
-          toast.message('Student link copied');
-        },
-      },
-      duration: 14_000,
+      description: code
+        ? `Student code: ${code} — students enter it on the site home under Student Code. You can still share the /play/ link.`
+        : 'Share this student link (participants should not use the facilitator dashboard).',
+      action: code
+        ? {
+            label: 'Copy student code',
+            onClick: () => {
+              void navigator.clipboard.writeText(code);
+              toast.message('Code copied');
+            },
+          }
+        : {
+            label: 'Copy student link',
+            onClick: () => {
+              void navigator.clipboard.writeText(url);
+              toast.message('Student link copied');
+            },
+          },
+      duration: 16_000,
     });
     navigate('.', { replace: true, state: {} });
   }, [location.state, navigate]);
@@ -257,9 +269,10 @@ export default function Home() {
           </CardContent>
         </Card>
         <p className="max-w-md text-center text-sm text-slate-500">
-          If you are joining as a participant, use the link from your facilitator (it includes{' '}
-          <code className="rounded bg-white px-1.5 py-0.5 text-slate-700 shadow-sm">/play/</code>
-          ).
+          <Link to="/" className="font-medium text-emerald-700 hover:underline underline-offset-2">
+            Site home
+          </Link>
+          {' — '}participants use a 6-character code or a <code className="rounded bg-white px-1.5 py-0.5 text-slate-700 shadow-sm">/play/</code> link from their teacher.
         </p>
       </div>
     );
@@ -272,7 +285,10 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-emerald-900 tracking-tight">Your Activities</h1>
           <p className="text-emerald-600 mt-2">Share a public student link for each activity; keep results here.</p>
           <p className="text-xs text-slate-500 mt-2">
-            Facilitator entry:{' '}
+            <Link to="/" className="text-emerald-700 hover:underline underline-offset-2">
+              Site home
+            </Link>
+            {' · '}
             <Link to="/setup" className="text-emerald-700 hover:underline underline-offset-2">
               {typeof window !== 'undefined' ? `${window.location.origin}/setup` : '/setup'}
             </Link>
@@ -360,8 +376,28 @@ export default function Home() {
                 </Button>
               </CardContent>
               {activity.id && (
-                <div className="px-4 pb-3 text-[11px] text-slate-400 font-mono truncate" title={getPublicPlayUrl(activity.id)}>
-                  Students: {getPublicPlayUrl(activity.id)}
+                <div className="space-y-2 px-4 pb-3">
+                  {activity.studentCode ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[11px] font-mono font-semibold tracking-wider text-emerald-900">
+                        <KeyRound className="h-3 w-3" aria-hidden />
+                        {activity.studentCode}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(activity.studentCode!);
+                          toast.success('Student code copied');
+                        }}
+                      >
+                        Copy code
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="truncate font-mono text-[11px] text-slate-400" title={getPublicPlayUrl(activity.id)}>
+                    Students: {getPublicPlayUrl(activity.id)}
+                  </div>
                 </div>
               )}
             </Card>

@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import Landing from './pages/Landing';
 import Home from './pages/Home';
 import FacilitatorSetup from './pages/FacilitatorSetup';
 import CreateActivity from './pages/CreateActivity';
@@ -56,7 +57,8 @@ export default function App() {
       <PostGoogleRedirectToast />
       <div className="min-h-screen bg-[#f5f7f5] text-slate-900 font-sans">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/editor" element={<Home />} />
           <Route path="/setup" element={<FacilitatorSetup />} />
           <Route path="/create" element={<CreateActivity />} />
           <Route path="/edit/:activityId" element={<CreateActivity />} />

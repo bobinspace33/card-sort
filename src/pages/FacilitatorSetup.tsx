@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { auth } from '../firebase';
+import { EDITOR_PATH } from '../lib/paths';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ export default function FacilitatorSetup() {
   };
 
   if (checking) return <div className="p-8 text-center text-slate-600">Loading…</div>;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={EDITOR_PATH} replace />;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 p-6 bg-[#f5f7f5]">

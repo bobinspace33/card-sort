@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType, auth } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Activity, Response } from '../types';
 import { getPublicPlayUrl } from '../lib/activityUrls';
+import { EDITOR_PATH } from '../lib/paths';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Users, CheckCircle, Copy } from 'lucide-react';
@@ -24,7 +25,7 @@ export default function ActivityResults() {
         // Check auth first
         if (!auth.currentUser) {
           toast.error('You must be logged in to view results');
-          navigate('/');
+          navigate(EDITOR_PATH);
           return;
         }
 
@@ -40,7 +41,7 @@ export default function ActivityResults() {
         const actData = docSnap.data() as Activity;
         if (actData.ownerId !== auth.currentUser.uid) {
           toast.error('You do not have permission to view these results');
-          navigate('/');
+          navigate(EDITOR_PATH);
           return;
         }
 
@@ -73,6 +74,12 @@ export default function ActivityResults() {
     toast.success('Student link copied to clipboard!');
   };
 
+  const copyStudentCode = () => {
+    if (!activity?.studentCode) return;
+    void navigator.clipboard.writeText(activity.studentCode);
+    toast.success('Student code copied!');
+  };
+
   if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (!activity) return <div className="p-8 text-center">Activity not found</div>;
 
@@ -101,7 +108,7 @@ export default function ActivityResults() {
     <div className="max-w-6xl mx-auto p-6 md:p-12">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
-          <Button variant="ghost" onClick={() => navigate('/')} className="mr-4 rounded-full w-10 h-10 p-0">
+          <Button variant="ghost" onClick={() => navigate(EDITOR_PATH)} className="mr-4 rounded-full w-10 h-10 p-0">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -109,9 +116,20 @@ export default function ActivityResults() {
             <p className="text-emerald-600 mt-1">{responses.length} total responses</p>
           </div>
         </div>
-        <Button onClick={copyLink} variant="outline" className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-          <Copy className="w-4 h-4 mr-2" /> Copy Student Link
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {activity.studentCode ? (
+            <Button
+              onClick={copyStudentCode}
+              variant="outline"
+              className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            >
+              <Copy className="w-4 h-4 mr-2" /> Copy student code ({activity.studentCode})
+            </Button>
+          ) : null}
+          <Button onClick={copyLink} variant="outline" className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+            <Copy className="w-4 h-4 mr-2" /> Copy student link
+          </Button>
+        </div>
       </div>
 
       {responses.length === 0 ? (
