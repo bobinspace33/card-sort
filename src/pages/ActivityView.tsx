@@ -37,11 +37,14 @@ const DroppableCategory: React.FC<{
   }
 
   return (
-    <div ref={setNodeRef} className={`flex h-full min-h-0 max-h-full flex-col p-4 ${shell}`}>
+    <div ref={setNodeRef} className={`flex h-full min-h-0 max-h-full flex-col overflow-hidden p-4 ${shell}`}>
       <h3 className="mb-3 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
-      {/* Column-direction flex + wrap + bounded height → new columns to the right as cards fill vertical space */}
+      {/*
+        Column flex + wrap needs a definite height. h-full fills the category shell; max-h caps
+        so we never grow the row vertically — extra cards flow into new columns (w-max grows).
+      */}
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
-        <div className="flex h-full max-h-full w-max flex-col flex-wrap content-start items-start gap-4">
+        <div className="box-border flex h-full max-h-[min(48vh,calc(100svh-15.5rem))] min-h-[7rem] w-max flex-col flex-wrap content-start items-start gap-4">
           {children}
         </div>
       </div>
@@ -319,13 +322,13 @@ export default function ActivityView() {
           <div className="flex min-h-0 flex-1 flex-col gap-6">
             {/* Categories: centered row; height bounded by flex layout; each category grows wider as cards wrap into extra columns */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="flex h-full min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
+              <div className="flex min-h-0 max-h-[min(52vh,calc(100svh-13rem))] flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] sm:max-h-[min(56vh,calc(100svh-12rem))]">
                 <div className="flex h-full min-h-0 min-w-full justify-center px-1 py-1">
                   <div className="flex h-full max-h-full w-max items-stretch gap-4">
                   {activity.categories.map((cat) => (
                     <div
                       key={cat}
-                      className="flex h-full max-h-full min-h-0 min-w-[12.5rem] shrink-0 self-stretch sm:min-w-[13rem]"
+                      className="flex h-full max-h-full min-h-0 min-w-[12.5rem] max-w-none shrink-0 self-stretch overflow-hidden sm:min-w-[13rem]"
                     >
                       <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
                         {activity.cards
