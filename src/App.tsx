@@ -14,9 +14,29 @@ import ActivityView from './pages/ActivityView';
 import ActivityResults from './pages/ActivityResults';
 
 const REDIRECT_OK_KEY = 'cardSortGoogleRedirectOk';
+const REDIRECT_ERR_KEY = 'cardSortGoogleRedirectErr';
 
 function PostGoogleRedirectToast() {
   useEffect(() => {
+    const errRaw = sessionStorage.getItem(REDIRECT_ERR_KEY);
+    if (errRaw) {
+      sessionStorage.removeItem(REDIRECT_ERR_KEY);
+      try {
+        const { code, message } = JSON.parse(errRaw) as { code: string; message: string };
+        const host = window.location.hostname;
+        if (code === 'auth/unauthorized-domain') {
+          toast.error(
+            `Firebase blocked sign-in for “${host}”. Open Firebase Console → Authentication → Settings → Authorized domains → Add domain → enter: ${host}`,
+            { duration: 25_000 },
+          );
+        } else {
+          toast.error(message || code || 'Google sign-in failed after redirect', { duration: 14_000 });
+        }
+      } catch {
+        toast.error('Google sign-in failed after redirect', { duration: 10_000 });
+      }
+    }
+
     if (sessionStorage.getItem(REDIRECT_OK_KEY)) {
       sessionStorage.removeItem(REDIRECT_OK_KEY);
       toast.success('Signed in with Google');

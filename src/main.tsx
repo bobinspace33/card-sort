@@ -16,8 +16,15 @@ void (async () => {
     if (result?.user) {
       sessionStorage.setItem('cardSortGoogleRedirectOk', '1');
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Google redirect sign-in failed:', err);
+    const e = err as { code?: string; message?: string };
+    if (e?.code) {
+      sessionStorage.setItem(
+        'cardSortGoogleRedirectErr',
+        JSON.stringify({ code: e.code, message: e.message ?? '' }),
+      );
+    }
   }
 
   createRoot(document.getElementById('root')!).render(
