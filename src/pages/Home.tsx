@@ -153,7 +153,7 @@ export default function Home() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
         <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm rounded-3xl">
           <CardHeader className="text-center pb-2">
-            <CardTitle className="text-3xl font-bold text-emerald-800">Card Sort Maker</CardTitle>
+            <CardTitle className="text-3xl font-bold text-emerald-800">Sort-o-Matic 5000</CardTitle>
             <CardDescription className="text-emerald-600/80">
               Create interactive card sorts. Teachers and facilitators sign in here; students open a separate
               <span className="font-medium"> /play/… </span>
@@ -261,8 +261,8 @@ export default function Home() {
                   Click sign-in again. Any failed request stays in the list; click it and copy the URL or status code.
                 </li>
                 <li>
-                  In Console, filter by <span className="font-mono">CardSort</span> — this app logs{' '}
-                  <span className="font-mono">[CardSort Auth]</span> lines that do not disappear the same way.
+                  In Console, filter by <span className="font-mono">SortOMatic</span> — this app logs{' '}
+                  <span className="font-mono">[SortOMatic Auth]</span> lines that do not disappear the same way.
                 </li>
               </ol>
             </details>
@@ -282,6 +282,7 @@ export default function Home() {
     <div className="max-w-5xl mx-auto p-6 md:p-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-12">
         <div>
+          <p className="text-sm font-semibold uppercase tracking-wider text-emerald-600">Sort-o-Matic 5000</p>
           <h1 className="text-4xl font-bold text-emerald-900 tracking-tight">Your Activities</h1>
           <p className="text-emerald-600 mt-2">Share a public student link for each activity; keep results here.</p>
           <p className="text-xs text-slate-500 mt-2">

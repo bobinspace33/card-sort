@@ -327,7 +327,10 @@ export default function CreateActivity() {
         <Button variant="ghost" onClick={() => navigate(EDITOR_PATH)} className="mr-4 rounded-full w-10 h-10 p-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="text-3xl font-bold text-emerald-900">{isEditMode ? 'Edit Card Sort' : 'Create Card Sort'}</h1>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wider text-emerald-600">Sort-o-Matic 5000</p>
+          <h1 className="text-3xl font-bold text-emerald-900">{isEditMode ? 'Edit activity' : 'Create activity'}</h1>
+        </div>
       </div>
 
       <div className="space-y-8">

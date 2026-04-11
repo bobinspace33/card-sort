@@ -42,7 +42,7 @@ export default function Landing() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-10 bg-[#f5f7f5] px-4 py-12">
       <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl">Card Sort Maker</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl">Sort-o-Matic 5000</h1>
         <p className="mt-3 max-w-md text-emerald-700/80">Teachers build sorts; students join with a code or link.</p>
       </div>
 
@@ -55,7 +55,7 @@ export default function Landing() {
           )}
         >
           <LayoutGrid className="h-8 w-8 opacity-90" aria-hidden />
-          Card Sort Editor
+          Facilitator dashboard
           <span className="text-sm font-normal text-white/90">Sign in and manage activities</span>
         </Link>
 

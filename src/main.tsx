@@ -47,7 +47,7 @@ void (async () => {
       if (looksLikeOAuthReturnToApp(hrefBefore, referrerBefore)) {
         const host = window.location.hostname;
         const origin = window.location.origin;
-        console.warn('[CardSort Auth] OAuth return but no user — check Authorized domains and OAuth JS origins.', {
+        console.warn('[SortOMatic Auth] OAuth return but no user — check Authorized domains and OAuth JS origins.', {
           host,
           hrefSample: hrefBefore.split('?')[0],
         });
