@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { RotateCcw, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 const DroppableCategory: React.FC<{
   id: string;
@@ -40,7 +40,7 @@ const DroppableCategory: React.FC<{
     <div ref={setNodeRef} className={`flex h-full min-h-0 max-h-full flex-col overflow-hidden p-4 ${shell}`}>
       <h3 className="mb-3 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
       {/* Column flex + wrap: height comes from flex layout above the pinned deck. */}
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
+      <div className="min-h-0 flex-1 overflow-visible">
         <div className="box-border flex h-full max-h-full min-h-[7rem] w-max flex-col flex-wrap content-start items-start gap-4">
           {children}
         </div>
@@ -104,6 +104,69 @@ const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: (
           </div>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+/**
+ * Categories grow to natural width (extra card columns widen each box). When the combined
+ * layout exceeds the viewport, the whole group scales down — no scrolling.
+ */
+function ScaledCategoriesRegion({ children, measureKey }: { children: React.ReactNode; measureKey: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ bw: 0, bh: 0, s: 1 });
+
+  const measure = useCallback(() => {
+    const outer = containerRef.current;
+    const inner = contentRef.current;
+    if (!outer || !inner) return;
+    const cw = Math.max(1, outer.clientWidth - 6);
+    const ch = Math.max(1, outer.clientHeight - 6);
+    const bw = inner.scrollWidth;
+    const bh = inner.scrollHeight;
+    if (bw < 1 || bh < 1) return;
+    const s = Math.min(1, cw / bw, ch / bh);
+    setFit({ bw, bh, s });
+  }, []);
+
+  useLayoutEffect(() => {
+    let frame = requestAnimationFrame(() => measure());
+    const outer = containerRef.current;
+    const ro = new ResizeObserver(() => measure());
+    if (outer) ro.observe(outer);
+    const inner = contentRef.current;
+    if (inner) ro.observe(inner);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [measure, measureKey]);
+
+  const clipW = fit.bw > 0 ? fit.bw * fit.s : undefined;
+  const clipH = fit.bh > 0 ? fit.bh * fit.s : undefined;
+
+  return (
+    <div ref={containerRef} className="flex min-h-0 min-w-0 flex-1 items-start justify-center overflow-hidden">
+      <div
+        className="overflow-hidden"
+        style={
+          clipW != null && clipH != null
+            ? { width: clipW, height: clipH, maxWidth: '100%' }
+            : { minHeight: '6rem', width: '100%' }
+        }
+      >
+        <div
+          ref={contentRef}
+          className="flex w-max max-w-none flex-nowrap items-stretch gap-3"
+          style={{
+            transform: `scale(${fit.s})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
@@ -306,6 +369,14 @@ export default function ActivityView() {
 
   const activeCard = activeId ? activity.cards.find(c => c.id === activeId) : null;
 
+  const categoryLayoutKey = useMemo(
+    () =>
+      activity.categories
+        .map((c) => `${c}:${activity.cards.filter((x) => placements[x.id] === c).length}`)
+        .join('|'),
+    [activity.cards, activity.categories, placements],
+  );
+
   return (
     <ActivityShell backgroundImage={activity.backgroundImage} variant="play">
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -328,32 +399,28 @@ export default function ActivityView() {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Categories: fills all space above the pinned deck */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
-                <div className="flex h-full min-h-0 min-w-full justify-center px-1 py-1">
-                  <div className="flex h-full max-h-full w-max items-stretch gap-4">
-                    {activity.categories.map((cat) => (
-                      <div
-                        key={cat}
-                        className="flex h-full max-h-full min-h-0 min-w-[12.5rem] max-w-none shrink-0 self-stretch overflow-hidden sm:min-w-[13rem]"
-                      >
-                        <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
-                          {activity.cards
-                            .filter((c) => placements[c.id] === cat)
-                            .map((card) => (
-                              <SortableCard
-                                key={card.id}
-                                card={card}
-                                isFlipped={!!flippedCards[card.id]}
-                                onClick={() => handleFlip(card.id)}
-                              />
-                            ))}
-                        </DroppableCategory>
-                      </div>
-                    ))}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0.5 py-0.5">
+              <ScaledCategoriesRegion measureKey={categoryLayoutKey}>
+                {activity.categories.map((cat) => (
+                  <div
+                    key={cat}
+                    className="flex h-full max-h-full min-h-0 min-w-[10rem] max-w-none shrink-0 self-stretch overflow-visible sm:min-w-[11rem]"
+                  >
+                    <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-max max-w-none">
+                      {activity.cards
+                        .filter((c) => placements[c.id] === cat)
+                        .map((card) => (
+                          <SortableCard
+                            key={card.id}
+                            card={card}
+                            isFlipped={!!flippedCards[card.id]}
+                            onClick={() => handleFlip(card.id)}
+                          />
+                        ))}
+                    </DroppableCategory>
                   </div>
-                </div>
-              </div>
+                ))}
+              </ScaledCategoriesRegion>
             </div>
 
             {/* Deck: pinned to bottom of viewport (flex sibling below flex-1 categories) */}
