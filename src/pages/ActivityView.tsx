@@ -39,12 +39,9 @@ const DroppableCategory: React.FC<{
   return (
     <div ref={setNodeRef} className={`flex h-full min-h-0 max-h-full flex-col overflow-hidden p-4 ${shell}`}>
       <h3 className="mb-3 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
-      {/*
-        Column flex + wrap needs a definite height. h-full fills the category shell; max-h caps
-        so we never grow the row vertically — extra cards flow into new columns (w-max grows).
-      */}
+      {/* Column flex + wrap: height comes from flex layout above the pinned deck. */}
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
-        <div className="box-border flex h-full max-h-[min(48vh,calc(100svh-15.5rem))] min-h-[7rem] w-max flex-col flex-wrap content-start items-start gap-4">
+        <div className="box-border flex h-full max-h-full min-h-[7rem] w-max flex-col flex-wrap content-start items-start gap-4">
           {children}
         </div>
       </div>
@@ -123,7 +120,9 @@ function ActivityShell({
   const url = backgroundImage?.trim();
   const baseClass = variant === 'welcome' ? 'bg-emerald-50/30' : 'bg-[#f5f7f5]';
   return (
-    <div className={`relative min-h-screen ${baseClass}`}>
+    <div
+      className={`relative ${variant === 'play' ? 'h-svh max-h-svh overflow-hidden' : 'min-h-screen'} ${baseClass}`}
+    >
       {url ? (
         <div
           aria-hidden
@@ -131,7 +130,15 @@ function ActivityShell({
           style={{ backgroundImage: `url(${url})`, opacity: 0.3 }}
         />
       ) : null}
-      <div className="relative z-[1] min-h-screen flex flex-col">{children}</div>
+      <div
+        className={
+          variant === 'play'
+            ? 'relative z-[1] flex h-svh max-h-svh min-h-0 flex-col overflow-hidden'
+            : 'relative z-[1] flex min-h-screen flex-col'
+        }
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -301,8 +308,8 @@ export default function ActivityView() {
 
   return (
     <ActivityShell backgroundImage={activity.backgroundImage} variant="play">
-    <div className="flex flex-col flex-1 min-h-0">
-      <header className="bg-white px-6 py-4 shadow-sm flex justify-between items-center z-10">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <header className="z-10 flex shrink-0 justify-between bg-white px-4 py-3 shadow-sm sm:px-6 sm:py-4">
         <div>
           <h1 className="text-xl font-bold text-emerald-900">{activity.title}</h1>
           <p className="text-sm text-slate-500">Student: {studentName}</p>
@@ -317,43 +324,45 @@ export default function ActivityView() {
         </div>
       </header>
 
-      <main className="flex flex-1 min-h-0 flex-col overflow-hidden p-4 sm:p-6">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 pt-2 sm:px-5 sm:pt-3">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-          <div className="flex min-h-0 flex-1 flex-col gap-6">
-            {/* Categories: centered row; height bounded by flex layout; each category grows wider as cards wrap into extra columns */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* Categories: fills all space above the pinned deck */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="flex min-h-0 max-h-[min(52vh,calc(100svh-13rem))] flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] sm:max-h-[min(56vh,calc(100svh-12rem))]">
+              <div className="flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
                 <div className="flex h-full min-h-0 min-w-full justify-center px-1 py-1">
                   <div className="flex h-full max-h-full w-max items-stretch gap-4">
-                  {activity.categories.map((cat) => (
-                    <div
-                      key={cat}
-                      className="flex h-full max-h-full min-h-0 min-w-[12.5rem] max-w-none shrink-0 self-stretch overflow-hidden sm:min-w-[13rem]"
-                    >
-                      <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
-                        {activity.cards
-                          .filter((c) => placements[c.id] === cat)
-                          .map((card) => (
-                            <SortableCard
-                              key={card.id}
-                              card={card}
-                              isFlipped={!!flippedCards[card.id]}
-                              onClick={() => handleFlip(card.id)}
-                            />
-                          ))}
-                      </DroppableCategory>
-                    </div>
-                  ))}
+                    {activity.categories.map((cat) => (
+                      <div
+                        key={cat}
+                        className="flex h-full max-h-full min-h-0 min-w-[12.5rem] max-w-none shrink-0 self-stretch overflow-hidden sm:min-w-[13rem]"
+                      >
+                        <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
+                          {activity.cards
+                            .filter((c) => placements[c.id] === cat)
+                            .map((card) => (
+                              <SortableCard
+                                key={card.id}
+                                card={card}
+                                isFlipped={!!flippedCards[card.id]}
+                                onClick={() => handleFlip(card.id)}
+                              />
+                            ))}
+                        </DroppableCategory>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Deck Area */}
-            <div className="shrink-0">
-              <h3 className="mb-4 px-2 text-sm font-semibold uppercase tracking-wider text-slate-500">Unsorted Cards</h3>
+            {/* Deck: pinned to bottom of viewport (flex sibling below flex-1 categories) */}
+            <div className="shrink-0 border-t border-slate-200/90 bg-[#f5f7f5]/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_-4px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+              <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:text-sm">
+                Unsorted Cards
+              </h3>
               <DroppableCategory id="deck" title="" layout="deck" isOver={activeCategory === 'deck'}>
-                <div className="flex min-h-[160px] flex-wrap content-start justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-300 bg-white/40 p-4">
+                <div className="flex min-h-[140px] max-h-[40vh] flex-wrap content-start justify-center gap-3 overflow-y-auto rounded-2xl border-2 border-dashed border-slate-300 bg-white/50 p-3 sm:min-h-[160px] sm:gap-4 sm:rounded-3xl sm:p-4">
                   {activity.cards.filter(c => placements[c.id] === 'deck').map(card => (
                     <SortableCard
                       key={card.id}
@@ -363,7 +372,7 @@ export default function ActivityView() {
                     />
                   ))}
                   {activity.cards.filter(c => placements[c.id] === 'deck').length === 0 && (
-                    <div className="flex h-full w-full items-center justify-center text-slate-400">All cards sorted!</div>
+                    <div className="flex min-h-[6rem] w-full items-center justify-center text-slate-400">All cards sorted!</div>
                   )}
                 </div>
               </DroppableCategory>
