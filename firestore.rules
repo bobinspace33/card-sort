@@ -20,6 +20,7 @@ service cloud.firestore {
     //       - correctCategory: string (max 50 chars)
     //   - checkAnswers: boolean (required)
     //   - showScore: boolean (required)
+    //   - backgroundImage: string (optional, max 2000 chars, URL — may be empty)
     //   - ownerId: string (required, immutable)
     //   - createdAt: timestamp (required, immutable)
     //
@@ -67,13 +68,14 @@ service cloud.firestore {
 
     function isValidActivity() {
       let data = request.resource.data;
-      return hasRequiredFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt']) &&
-             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt']) &&
+      return hasRequiredFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt', 'backgroundImage']) &&
+             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'backgroundImage', 'ownerId', 'createdAt']) &&
              isValidString(data.title, 1, 100) &&
              data.categories is list && data.categories.size() <= 20 &&
              data.cards is list && data.cards.size() <= 100 &&
              data.checkAnswers is bool &&
              data.showScore is bool &&
+             data.backgroundImage is string && data.backgroundImage.size() <= 2000 &&
              data.ownerId is string &&
              data.createdAt is timestamp;
     }

@@ -14,6 +14,8 @@ export interface Activity {
   cards: CardData[];
   checkAnswers: boolean;
   showScore: boolean;
+  /** Optional URL; shown behind the student activity UI at 30% opacity. */
+  backgroundImage?: string;
   ownerId: string;
   createdAt: any;
 }

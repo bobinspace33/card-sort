@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { auth } from '../firebase';
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithGoogle } from '../lib/googleSignIn';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -17,13 +18,8 @@ export default function FacilitatorSetup() {
     return () => unsub();
   }, []);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Login failed', error);
-    }
+  const handleLogin = () => {
+    void signInWithGoogle();
   };
 
   if (checking) return <div className="p-8 text-center text-slate-600">Loading…</div>;

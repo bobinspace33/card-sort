@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Activity } from '../types';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Plus, BarChart, Play, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPublicPlayUrl } from '../lib/activityUrls';
+import { signInWithGoogle } from '../lib/googleSignIn';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  /** First onAuthStateChanged has run — don’t block the whole page on Firestore. */
+  const [authReady, setAuthReady] = useState(false);
+  /** Waiting for first activities snapshot (signed-in only). */
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  /** True if the activities listener never responded in time (Firestore/network). */
+  const [activitiesLoadTimedOut, setActivitiesLoadTimedOut] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  /** Same as `!authReady` — keeps the name `loading` defined for clarity and avoids stale HMR refs to a removed variable. */
+  const loading = !authReady;
 
   useEffect(() => {
     const createdId = (location.state as { createdActivityId?: string } | null)?.createdActivityId;
@@ -38,42 +47,69 @@ export default function Home() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (!currentUser) {
-        setLoading(false);
-      }
+      setAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setActivities([]);
+      setActivitiesLoading(false);
+      setActivitiesLoadTimedOut(false);
+      return;
+    }
+
+    setActivitiesLoading(true);
+    setActivitiesLoadTimedOut(false);
+    const slowTimer = window.setTimeout(() => {
+      setActivitiesLoading((still) => {
+        if (still) {
+          setActivitiesLoadTimedOut(true);
+          toast.error(
+            'Still loading activities. Check Firestore is enabled, rules are deployed, and your network. If you use a named database, set VITE_FIREBASE_FIRESTORE_DATABASE_ID.',
+          );
+        }
+        return false;
+      });
+    }, 18_000);
 
     const q = query(collection(db, 'activities'), where('ownerId', '==', user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const acts: Activity[] = [];
-      snapshot.forEach((doc) => {
-        acts.push({ id: doc.id, ...doc.data() } as Activity);
-      });
-      setActivities(acts);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'activities');
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        window.clearTimeout(slowTimer);
+        setActivitiesLoadTimedOut(false);
+        const acts: Activity[] = [];
+        snapshot.forEach((doc) => {
+          acts.push({ id: doc.id, ...doc.data() } as Activity);
+        });
+        setActivities(acts);
+        setActivitiesLoading(false);
+      },
+      (error) => {
+        window.clearTimeout(slowTimer);
+        setActivitiesLoadTimedOut(false);
+        setActivitiesLoading(false);
+        console.error('Firestore list activities:', error);
+        toast.error(
+          'Could not load activities (permission denied). Open Firebase → Firestore → Rules, publish the rules from your repo file firestore.rules, and use the same Firebase project as firebase-applet-config.json.',
+          { duration: 14_000 },
+        );
+      },
+    );
 
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(slowTimer);
+      unsubscribe();
+    };
   }, [user]);
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Login failed', error);
-    }
+  const handleLogin = () => {
+    void signInWithGoogle();
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-600">Loading…</div>;
 
   if (!user) {
     return (
@@ -129,7 +165,22 @@ export default function Home() {
         </Button>
       </div>
 
-      {activities.length === 0 ? (
+      {activitiesLoading ? (
+        <div className="text-center py-24 bg-white rounded-3xl shadow-sm border border-emerald-100">
+          <p className="text-emerald-800 font-medium">Loading your activities…</p>
+          <p className="text-sm text-slate-500 mt-2">If this never finishes, open the browser console for Firestore errors.</p>
+        </div>
+      ) : activities.length === 0 && activitiesLoadTimedOut ? (
+        <div className="text-center py-24 bg-amber-50/80 rounded-3xl shadow-sm border border-amber-100">
+          <h3 className="text-xl font-medium text-amber-900 mb-2">Could not load activities in time</h3>
+          <p className="text-amber-800/90 mb-6 max-w-md mx-auto text-sm">
+            Firestore did not respond (rules, database, network, or wrong project). Check the browser console. You can still try creating an activity — save will fail if Firestore is not set up.
+          </p>
+          <Button onClick={() => navigate('/create')} className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-white">
+            Try Create Activity
+          </Button>
+        </div>
+      ) : activities.length === 0 ? (
         <div className="text-center py-24 bg-white rounded-3xl shadow-sm border border-emerald-100">
           <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Plus className="w-10 h-10 text-emerald-300" />

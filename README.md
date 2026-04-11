@@ -40,6 +40,30 @@ View your app in AI Studio: https://ai.studio/apps/11e16166-a111-48f9-973b-2bcb7
    ```
    Or paste the contents of `storage.rules` into **Storage → Rules** in the console.
 
+### If image upload shows a CORS / preflight error in the browser
+
+The app talks to `firebasestorage.googleapis.com` from `http://localhost:3000`. Your bucket must allow that origin (and your production URL later).
+
+1. In [Firebase Console](https://console.firebase.google.com) → **Project settings** (gear) → **Your apps**, copy **`storageBucket`** exactly into `firebase-applet-config.json` (some projects use `*.appspot.com`, others `*.firebasestorage.app` — they must match).
+2. Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) so you have `gsutil`.
+   - **If `brew install --cask gcloud-cli` fails** with `virtualenv: command not found` or missing `Caskroom/...` paths: remove the broken install (`brew uninstall --cask gcloud-cli --force`), then use Google’s **standalone** SDK (no Homebrew), for example in your home directory:
+     ```bash
+     cd ~
+     curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz
+     tar -xf google-cloud-cli-darwin-arm.tar.gz
+     ./google-cloud-sdk/install.sh --quiet --usage-reporting false --path-update true
+     ```
+     (On Intel Macs, download `google-cloud-cli-darwin-x86_64.tar.gz` instead.) Open a **new** terminal, then run `gcloud auth login`. The installer adds `gcloud` and `gsutil` to your PATH (see the script’s closing instructions if not).
+4. From this project folder, apply [`storage-cors.json`](storage-cors.json) to **both** bucket names if both exist in [Google Cloud Console](https://console.cloud.google.com/storage/browser) → Storage → Buckets:
+
+   ```bash
+   gsutil cors set storage-cors.json gs://cardsort-1f0f7.firebasestorage.app
+   gsutil cors set storage-cors.json gs://cardsort-1f0f7.appspot.com
+   ```
+
+   Replace `cardsort-1f0f7` with your **project ID** if different. Only run the line for buckets you actually have.
+5. Add your **Vercel / custom domain** to the `origin` array in `storage-cors.json`, run `gsutil cors set` again, then retry the upload.
+
 ## Test the app locally
 
 1. **Install and run:** `npm install` then `npm run dev` (opens on port 3000 by default).

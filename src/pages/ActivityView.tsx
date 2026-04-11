@@ -14,22 +14,28 @@ import { RotateCcw, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 
-const DroppableCategory: React.FC<{ id: string, title: string, children: React.ReactNode, isOver: boolean }> = ({ id, title, children, isOver }) => {
+const DroppableCategory: React.FC<{
+  id: string;
+  title: string;
+  children: React.ReactNode;
+  isOver: boolean;
+  className?: string;
+}> = ({ id, title, children, isOver, className = '' }) => {
   const { setNodeRef } = useDroppable({ id });
   return (
     <div
       ref={setNodeRef}
-      className={`min-h-[200px] p-4 rounded-3xl border-2 transition-colors ${
+      className={`flex h-full min-h-[200px] flex-col p-4 rounded-3xl border-2 transition-colors ${
         isOver ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200 bg-white/50'
-      }`}
+      } ${className}`}
     >
-      <h3 className="text-lg font-semibold text-slate-700 mb-4 text-center">{title}</h3>
-      <div className="flex flex-wrap gap-4 justify-center">
+      <h3 className="mb-4 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
+      <div className="flex min-h-0 flex-1 flex-wrap content-start items-start justify-center gap-4">
         {children}
       </div>
     </div>
   );
-}
+};
 
 const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: () => void, isFlipped: boolean }> = ({ card, isDragging, onClick, isFlipped }) => {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -86,6 +92,31 @@ const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: (
           </div>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function ActivityShell({
+  backgroundImage,
+  variant,
+  children,
+}: {
+  backgroundImage?: string;
+  variant: 'welcome' | 'play';
+  children: React.ReactNode;
+}) {
+  const url = backgroundImage?.trim();
+  const baseClass = variant === 'welcome' ? 'bg-emerald-50/30' : 'bg-[#f5f7f5]';
+  return (
+    <div className={`relative min-h-screen ${baseClass}`}>
+      {url ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${url})`, opacity: 0.3 }}
+        />
+      ) : null}
+      <div className="relative z-[1] min-h-screen flex flex-col">{children}</div>
     </div>
   );
 }
@@ -221,7 +252,8 @@ export default function ActivityView() {
 
   if (!hasStarted) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 bg-emerald-50/30">
+      <ActivityShell backgroundImage={activity.backgroundImage} variant="welcome">
+      <div className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm rounded-3xl">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-3xl font-bold text-emerald-800">{activity.title}</CardTitle>
@@ -246,13 +278,15 @@ export default function ActivityView() {
           </CardContent>
         </Card>
       </div>
+      </ActivityShell>
     );
   }
 
   const activeCard = activeId ? activity.cards.find(c => c.id === activeId) : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5f7f5]">
+    <ActivityShell backgroundImage={activity.backgroundImage} variant="play">
+    <div className="flex flex-col flex-1 min-h-0">
       <header className="bg-white px-6 py-4 shadow-sm flex justify-between items-center z-10">
         <div>
           <h1 className="text-xl font-bold text-emerald-900">{activity.title}</h1>
@@ -271,19 +305,23 @@ export default function ActivityView() {
       <main className="flex-1 p-6 overflow-hidden flex flex-col">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           
-          {/* Categories Area */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8 overflow-y-auto max-h-[50vh] p-2">
-            {activity.categories.map(cat => (
-              <DroppableCategory key={cat} id={cat} title={cat} isOver={activeCategory === cat}>
-                {activity.cards.filter(c => placements[c.id] === cat).map(card => (
-                  <SortableCard 
-                    key={card.id} 
-                    card={card} 
-                    isFlipped={!!flippedCards[card.id]}
-                    onClick={() => handleFlip(card.id)}
-                  />
-                ))}
-              </DroppableCategory>
+          {/* Categories: single horizontal row, equal-height columns, scroll if many */}
+          <div className="mb-8 flex max-h-[50vh] flex-row items-stretch gap-4 overflow-x-auto overflow-y-auto p-2">
+            {activity.categories.map((cat) => (
+              <div key={cat} className="flex h-auto w-48 shrink-0 sm:w-52">
+                <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
+                  {activity.cards
+                    .filter((c) => placements[c.id] === cat)
+                    .map((card) => (
+                      <SortableCard
+                        key={card.id}
+                        card={card}
+                        isFlipped={!!flippedCards[card.id]}
+                        onClick={() => handleFlip(card.id)}
+                      />
+                    ))}
+                </DroppableCategory>
+              </div>
             ))}
           </div>
 
@@ -353,5 +391,6 @@ export default function ActivityView() {
         </DialogContent>
       </Dialog>
     </div>
+    </ActivityShell>
   );
 }

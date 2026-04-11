@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
+import { auth, db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, type UploadMetadata } from 'firebase/storage';
 import { CardData } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,20 @@ export default function CreateActivity() {
   const [cards, setCards] = useState<CardData[]>([]);
   const [checkAnswers, setCheckAnswers] = useState(true);
   const [showScore, setShowScore] = useState(true);
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [bulkCardCount, setBulkCardCount] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const MAX_CARDS = 100;
+
+  const makeEmptyCard = (): CardData => ({
+    id: uuidv4(),
+    frontText: '',
+    frontImage: '',
+    backText: '',
+    backImage: '',
+    correctCategory: categories[0] || '',
+  });
 
   const handleAddCategory = () => {
     if (categories.length >= 10) {
@@ -47,17 +60,35 @@ export default function CreateActivity() {
   };
 
   const handleAddCard = () => {
-    setCards([
-      ...cards,
-      {
-        id: uuidv4(),
-        frontText: '',
-        frontImage: '',
-        backText: '',
-        backImage: '',
-        correctCategory: categories[0] || '',
-      },
-    ]);
+    if (cards.length >= MAX_CARDS) {
+      toast.error(`Maximum ${MAX_CARDS} cards allowed`);
+      return;
+    }
+    setCards([...cards, makeEmptyCard()]);
+  };
+
+  const handleAddBulkCards = () => {
+    const n = parseInt(bulkCardCount, 10);
+    if (Number.isNaN(n) || n < 1) {
+      toast.error('Enter a number of cards to add (1 or more)');
+      return;
+    }
+    if (n > MAX_CARDS) {
+      toast.error(`You can add at most ${MAX_CARDS} cards at once`);
+      return;
+    }
+    const room = MAX_CARDS - cards.length;
+    if (room <= 0) {
+      toast.error(`Maximum ${MAX_CARDS} cards allowed`);
+      return;
+    }
+    const add = Math.min(n, room);
+    if (add < n) {
+      toast.message(`Only ${add} cards added (limit ${MAX_CARDS} total)`);
+    }
+    const newCards = Array.from({ length: add }, () => makeEmptyCard());
+    setCards((prev) => [...prev, ...newCards]);
+    setBulkCardCount('');
   };
 
   const handleUpdateCard = (id: string, field: keyof CardData, value: string) => {
@@ -68,6 +99,42 @@ export default function CreateActivity() {
     setCards(cards.filter((c) => c.id !== id));
   };
 
+  /** Storage rules require image/*; empty file.type breaks rules and some browsers omit it. */
+  function imageContentType(file: File): string {
+    if (file.type && file.type.startsWith('image/')) return file.type;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    const map: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      svg: 'image/svg+xml',
+      bmp: 'image/bmp',
+      heic: 'image/heic',
+    };
+    return map[ext] ?? 'image/jpeg';
+  }
+
+  const handleBackgroundImageUpload = async (file: File) => {
+    if (!auth.currentUser) {
+      toast.error('You must be logged in to upload images');
+      return;
+    }
+    const toastId = toast.loading('Uploading background…');
+    try {
+      const storageRef = ref(storage, `images/${auth.currentUser.uid}/bg_${uuidv4()}_${file.name}`);
+      const metadata: UploadMetadata = { contentType: imageContentType(file) };
+      await uploadBytes(storageRef, file, metadata);
+      const url = await getDownloadURL(storageRef);
+      setBackgroundImage(url);
+      toast.success('Background image uploaded', { id: toastId });
+    } catch (error) {
+      console.error(error);
+      toast.error('Background upload failed', { id: toastId });
+    }
+  };
+
   const handleImageUpload = async (cardId: string, field: 'frontImage' | 'backImage', file: File) => {
     if (!auth.currentUser) {
       toast.error('You must be logged in to upload images');
@@ -76,13 +143,17 @@ export default function CreateActivity() {
     const toastId = toast.loading('Uploading image...');
     try {
       const storageRef = ref(storage, `images/${auth.currentUser.uid}/${uuidv4()}_${file.name}`);
-      await uploadBytes(storageRef, file);
+      const metadata: UploadMetadata = { contentType: imageContentType(file) };
+      await uploadBytes(storageRef, file, metadata);
       const url = await getDownloadURL(storageRef);
       handleUpdateCard(cardId, field, url);
       toast.success('Image uploaded!', { id: toastId });
     } catch (error) {
       console.error(error);
-      toast.error('Failed to upload image', { id: toastId });
+      toast.error(
+        'Image upload failed. If the console shows a CORS error, apply storage rules to your bucket (see storage-cors.json + README) and confirm storageBucket in firebase-applet-config.json matches Firebase → Project settings.',
+        { id: toastId, duration: 12_000 },
+      );
     }
   };
 
@@ -116,13 +187,17 @@ export default function CreateActivity() {
         cards,
         checkAnswers,
         showScore,
+        backgroundImage: backgroundImage.trim(),
         ownerId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
       });
       navigate('/', { replace: true, state: { createdActivityId: docRef.id } });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'activities');
-      toast.error('Failed to create activity');
+      console.error('Create activity:', error);
+      toast.error(
+        'Could not save (Firestore permission denied). In Firebase Console → Firestore Database → Rules, paste the rules from firestore.rules in this project and click Publish.',
+        { duration: 14_000 },
+      );
     } finally {
       setSaving(false);
     }
@@ -152,6 +227,41 @@ export default function CreateActivity() {
                 placeholder="e.g., Biology Classification"
                 className="rounded-xl"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Background image (optional)</Label>
+              <p className="text-sm text-slate-500">Shown behind the student activity at 30% opacity.</p>
+              <div className="flex gap-2 items-center flex-wrap">
+                <ImageIcon className="w-5 h-5 text-slate-400 shrink-0" />
+                <Input
+                  value={backgroundImage}
+                  onChange={(e) => setBackgroundImage(e.target.value)}
+                  placeholder="https://… or upload"
+                  className="rounded-xl flex-1 min-w-[12rem]"
+                />
+                <div className="relative">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleBackgroundImageUpload(e.target.files[0]);
+                    }}
+                  />
+                  <Button type="button" variant="outline" className="rounded-xl">
+                    Upload
+                  </Button>
+                </div>
+              </div>
+              {backgroundImage.trim() ? (
+                <div className="mt-2 rounded-xl border border-slate-200 overflow-hidden max-w-xs aspect-video bg-slate-100 relative">
+                  <img src={backgroundImage} alt="" className="w-full h-full object-cover opacity-30" />
+                  <span className="absolute bottom-2 left-2 text-[10px] font-medium text-slate-600 bg-white/90 px-2 py-0.5 rounded">
+                    Preview at 30% opacity
+                  </span>
+                </div>
+              ) : null}
             </div>
             
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
@@ -197,17 +307,50 @@ export default function CreateActivity() {
         </Card>
 
         <Card className="rounded-3xl border-0 shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle className="text-xl">Cards</CardTitle>
-            <Button onClick={handleAddCard} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full">
-              <Plus className="w-4 h-4 mr-2" /> Add Card
-            </Button>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="space-y-2">
+                <Label htmlFor="bulk-cards">Add cards:</Label>
+                <Input
+                  id="bulk-cards"
+                  type="number"
+                  min={1}
+                  max={MAX_CARDS}
+                  inputMode="numeric"
+                  value={bulkCardCount}
+                  onChange={(e) => setBulkCardCount(e.target.value)}
+                  placeholder="e.g. 10"
+                  className="rounded-xl w-full sm:w-32"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAddBulkCards}
+                className="rounded-full shrink-0"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add multiple
+              </Button>
+              <p className="text-xs text-slate-500 sm:ml-auto sm:flex-1 sm:text-right w-full sm:w-auto">
+                Up to {MAX_CARDS} cards total. Use <span className="font-medium">Add Card</span> below the last card for one at a time.
+              </p>
+            </div>
+
             {cards.length === 0 && (
-              <div className="text-center py-8 text-slate-500">No cards added yet.</div>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center space-y-6">
+                <p className="text-slate-500">No cards added yet. Enter a number above or use Add Card.</p>
+                <Button onClick={handleAddCard} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full">
+                  <Plus className="w-4 h-4 mr-2" /> Add Card
+                </Button>
+              </div>
             )}
-            {cards.map((card, idx) => (
+            {cards.map((card, idx) => {
+              const isLast = idx === cards.length - 1;
+              return (
               <div key={card.id} className="p-6 rounded-2xl border border-slate-100 bg-slate-50/50 relative">
                 <Button
                   variant="ghost"
@@ -310,8 +453,20 @@ export default function CreateActivity() {
                     ))}
                   </select>
                 </div>
+                {isLast && (
+                  <div className="mt-6 pt-5 border-t border-slate-200/90">
+                    <Button
+                      type="button"
+                      onClick={handleAddCard}
+                      className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white rounded-full"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add Card
+                    </Button>
+                  </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </CardContent>
         </Card>
 

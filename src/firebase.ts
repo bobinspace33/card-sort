@@ -31,7 +31,13 @@ export const db =
     ? getFirestore(app, firestoreDatabaseId)
     : getFirestore(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
+
+const storageBucket = (appOptions as FirebaseOptions).storageBucket;
+/** Explicit gs:// bucket avoids some wrong-default bucket issues with newer *.firebasestorage.app names. */
+export const storage =
+  storageBucket && storageBucket.length > 0
+    ? getStorage(app, `gs://${storageBucket.replace(/^gs:\/\//, '')}`)
+    : getStorage(app);
 
 export enum OperationType {
   CREATE = 'create',
