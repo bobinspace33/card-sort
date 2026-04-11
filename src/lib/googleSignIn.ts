@@ -1,4 +1,4 @@
-import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { auth } from '../firebase';
 import { CARD_SORT_LAST_GOOGLE_AUTH_ERR } from './authSessionKeys';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ function authErrorMessage(code: string, message?: string): string {
     case 'auth/popup-closed-by-user':
       return 'Sign-in was cancelled.';
     case 'auth/popup-blocked':
-      return 'Popup was blocked. Try again.';
+      return 'Popup was blocked. Allow popups for this site or use full-page sign-in below.';
     case 'auth/cancelled-popup-request':
       return 'Another sign-in was already in progress. Try again.';
     case 'auth/unauthorized-domain':
@@ -24,26 +24,51 @@ function authErrorMessage(code: string, message?: string): string {
   }
 }
 
-/**
- * Full-page redirect to Google (no popup).
- * Avoids Cross-Origin-Opener-Policy issues where signInWithPopup hangs because
- * the browser blocks window.closed / window.close across the OAuth window.
- */
-export async function signInWithGoogle(): Promise<void> {
+function googleProvider(): GoogleAuthProvider {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
+  return provider;
+}
 
+function persistGoogleAuthFailure(error: unknown) {
+  const err = error as { code?: string; message?: string };
+  const code = err.code ?? 'unknown';
+  const message = err.message ?? (error instanceof Error ? error.message : String(error));
+  sessionStorage.setItem(
+    CARD_SORT_LAST_GOOGLE_AUTH_ERR,
+    JSON.stringify({ code, message, at: Date.now() }),
+  );
+  toast.error(authErrorMessage(code, message));
+  console.error('Google sign-in error:', error);
+}
+
+/**
+ * Popup sign-in (recommended on production). Requires the host to send
+ * `Cross-Origin-Opener-Policy: same-origin-allow-popups` (see vercel.json) so the
+ * Google window can finish without hanging.
+ */
+export async function signInWithGooglePopup(): Promise<void> {
   try {
-    await signInWithRedirect(auth, provider);
+    await signInWithPopup(auth, googleProvider());
+    sessionStorage.removeItem(CARD_SORT_LAST_GOOGLE_AUTH_ERR);
   } catch (error: unknown) {
-    const err = error as { code?: string; message?: string };
-    const code = err.code ?? 'unknown';
-    const message = err.message ?? (error instanceof Error ? error.message : String(error));
-    sessionStorage.setItem(
-      CARD_SORT_LAST_GOOGLE_AUTH_ERR,
-      JSON.stringify({ code, message, at: Date.now() }),
-    );
-    toast.error(authErrorMessage(code, message));
-    console.error('Google sign-in error:', error);
+    persistGoogleAuthFailure(error);
   }
+}
+
+/**
+ * Full-page redirect — use if popups are blocked or misconfigured.
+ * `getRedirectResult` runs once in main.tsx before React mounts.
+ */
+export async function signInWithGoogleRedirect(): Promise<void> {
+  try {
+    await signInWithRedirect(auth, googleProvider());
+  } catch (error: unknown) {
+    persistGoogleAuthFailure(error);
+  }
+}
+
+/** Default: popup (more reliable than redirect when COOP allows popups). */
+export async function signInWithGoogle(): Promise<void> {
+  return signInWithGooglePopup();
 }

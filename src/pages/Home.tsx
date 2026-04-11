@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Plus, BarChart, Play, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPublicPlayUrl } from '../lib/activityUrls';
-import { signInWithGoogle } from '../lib/googleSignIn';
+import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -127,8 +127,11 @@ export default function Home() {
     };
   }, [user]);
 
-  const handleLogin = () => {
-    void signInWithGoogle();
+  const handleLoginPopup = () => {
+    void signInWithGooglePopup();
+  };
+  const handleLoginRedirect = () => {
+    void signInWithGoogleRedirect();
   };
 
   if (loading) return <div className="p-8 text-center text-slate-600">Loading…</div>;
@@ -184,11 +187,18 @@ export default function Home() {
               </div>
             )}
             <Button
-              onClick={handleLogin}
+              onClick={handleLoginPopup}
               className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
             >
               Sign in with Google
             </Button>
+            <button
+              type="button"
+              onClick={handleLoginRedirect}
+              className="text-center text-sm text-slate-600 hover:text-slate-900 underline underline-offset-4"
+            >
+              Use full-page sign-in instead (if the button above does not work)
+            </button>
             <p className="text-center text-sm text-slate-500">
               Prefer a dedicated facilitator URL?{' '}
               <Link to="/setup" className="font-medium text-emerald-700 hover:underline underline-offset-4">

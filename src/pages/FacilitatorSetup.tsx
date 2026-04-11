@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { signInWithGoogle } from '../lib/googleSignIn';
+import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -18,8 +18,11 @@ export default function FacilitatorSetup() {
     return () => unsub();
   }, []);
 
-  const handleLogin = () => {
-    void signInWithGoogle();
+  const handleLoginPopup = () => {
+    void signInWithGooglePopup();
+  };
+  const handleLoginRedirect = () => {
+    void signInWithGoogleRedirect();
   };
 
   if (checking) return <div className="p-8 text-center text-slate-600">Loading…</div>;
@@ -38,11 +41,18 @@ export default function FacilitatorSetup() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-4">
           <Button
-            onClick={handleLogin}
+            onClick={handleLoginPopup}
             className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-emerald-500/20"
           >
             Sign in with Google
           </Button>
+          <button
+            type="button"
+            onClick={handleLoginRedirect}
+            className="text-center text-sm text-slate-600 hover:text-slate-900 underline underline-offset-4"
+          >
+            Use full-page sign-in instead
+          </button>
           <p className="text-center text-sm text-slate-500">
             Are you a student? Use the link your teacher sent (it should include{' '}
             <code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">/play/</code>
