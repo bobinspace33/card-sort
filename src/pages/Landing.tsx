@@ -4,7 +4,8 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { EDITOR_PATH } from '../lib/paths';
 import { isValidStudentCodeFormat, normalizeStudentCodeInput } from '../lib/studentCode';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { LayoutGrid, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
@@ -46,16 +47,17 @@ export default function Landing() {
       </div>
 
       <div className="flex w-full max-w-lg flex-col gap-6">
-        <Button
-          asChild
-          className="h-auto min-h-[5.5rem] w-full rounded-3xl bg-emerald-600 py-8 text-lg font-semibold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 sm:text-xl"
+        <Link
+          to={EDITOR_PATH}
+          className={cn(
+            buttonVariants({ variant: 'default' }),
+            'h-auto min-h-[5.5rem] w-full flex-col gap-2 rounded-3xl bg-emerald-600 py-8 text-lg font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 sm:text-xl [&]:hover:text-white',
+          )}
         >
-          <Link to={EDITOR_PATH} className="flex flex-col items-center justify-center gap-2">
-            <LayoutGrid className="h-8 w-8 opacity-90" aria-hidden />
-            Card Sort Editor
-            <span className="text-sm font-normal text-white/90">Sign in and manage activities</span>
-          </Link>
-        </Button>
+          <LayoutGrid className="h-8 w-8 opacity-90" aria-hidden />
+          Card Sort Editor
+          <span className="text-sm font-normal text-white/90">Sign in and manage activities</span>
+        </Link>
 
         <div className="flex min-h-[5.5rem] w-full flex-col justify-center gap-4 rounded-3xl border-2 border-slate-200 bg-white p-8 shadow-md shadow-slate-200/50">
           <div className="flex flex-col items-center gap-1 text-center">

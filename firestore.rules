@@ -69,7 +69,8 @@ service cloud.firestore {
 
     function optionalStudentCodeOk() {
       let data = request.resource.data;
-      return !data.keys().hasAny(['studentCode']) ||
+      // Key absent (legacy docs) is OK; if present must be 6 A–Z / 0–9.
+      return !data.keys().hasAll(['studentCode']) ||
         (data.studentCode is string &&
          data.studentCode.size() == 6 &&
          data.studentCode.matches('^[A-Z0-9]{6}$'));

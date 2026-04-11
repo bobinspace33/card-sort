@@ -270,6 +270,8 @@ export default function CreateActivity() {
           sc = await allocateUniqueStudentCode(db);
           setStudentCode(sc);
         }
+        // Omit ownerId/createdAt so Firestore keeps existing values — resending Timestamp
+        // objects can fail rules equality (request.resource.data.createdAt == resource.data.createdAt).
         await updateDoc(doc(db, 'activities', activityId), {
           title,
           categories,
@@ -277,8 +279,6 @@ export default function CreateActivity() {
           checkAnswers,
           showScore,
           backgroundImage: backgroundImage.trim(),
-          ownerId: editOwnerId,
-          createdAt: editCreatedAt,
           studentCode: sc,
         });
         toast.success('Activity updated');
