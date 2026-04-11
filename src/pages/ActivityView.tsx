@@ -74,12 +74,12 @@ const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: (
       className={`relative h-36 w-48 shrink-0 cursor-grab active:cursor-grabbing perspective-1000 ${isDragging ? 'opacity-50' : ''}`}
     >
       <motion.div
-        className="w-full h-full relative preserve-3d"
+        className="relative h-full w-full preserve-3d rounded-2xl shadow-[0_2px_10px_rgba(15,23,42,0.06),0_4px_20px_-4px_rgba(15,23,42,0.1)]"
         animate={{ rotateY: isFlipped ? 180 : 0 }}
         transition={{ duration: 0.4, type: "spring", stiffness: 260, damping: 20 }}
       >
         {/* Front */}
-        <div className="absolute w-full h-full backface-hidden rounded-2xl overflow-hidden shadow-md bg-white border-2 border-emerald-100 flex flex-col items-center justify-center p-2">
+        <div className="absolute h-full w-full backface-hidden overflow-hidden rounded-2xl border-2 border-emerald-100 bg-white flex flex-col items-center justify-center p-2">
           {card.frontImage && (
             <div className="w-full h-full absolute inset-0">
               <img src={card.frontImage} alt="Card front" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -92,7 +92,7 @@ const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: (
         </div>
 
         {/* Back */}
-        <div className="absolute w-full h-full backface-hidden rounded-2xl overflow-hidden shadow-md bg-amber-50 border-2 border-amber-200 flex flex-col items-center justify-center p-2 [transform:rotateY(180deg)]">
+        <div className="absolute h-full w-full backface-hidden overflow-hidden rounded-2xl border-2 border-amber-200 bg-amber-50 flex flex-col items-center justify-center p-2 [transform:rotateY(180deg)]">
           {card.backImage && (
             <div className="w-full h-full absolute inset-0">
               <img src={card.backImage} alt="Card back" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
