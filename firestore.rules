@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: activities
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required, max 100 chars)
+    //   - categories: list of strings (required, max 20 items, each max 50 chars)
+    //   - cards: list of objects (required, max 100 items)
+    //       - id: string
+    //       - frontText: string (max 200 chars)
+    //       - frontImage: string (max 1000 chars)
+    //       - backText: string (max 200 chars)
+    //       - backImage: string (max 1000 chars)
+    //       - correctCategory: string (max 50 chars)
+    //   - checkAnswers: boolean (required)
+    //   - showScore: boolean (required)
+    //   - ownerId: string (required, immutable)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: activities/{activityId}/responses
+    // Document ID: auto-generated
+    // Fields:
+    //   - studentName: string (required, max 100 chars)
+    //   - placements: map of string to string (required, max 100 keys)
+    //   - score: number (required, >= 0)
+    //   - submittedAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidOptionalString(val, maxLen) {
+      return val == null || (val is string && val.size() <= maxLen);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidActivity() {
+      let data = request.resource.data;
+      return hasRequiredFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt']) &&
+             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt']) &&
+             isValidString(data.title, 1, 100) &&
+             data.categories is list && data.categories.size() <= 20 &&
+             data.cards is list && data.cards.size() <= 100 &&
+             data.checkAnswers is bool &&
+             data.showScore is bool &&
+             data.ownerId is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidResponse() {
+      let data = request.resource.data;
+      return hasRequiredFields(['studentName', 'placements', 'score', 'submittedAt']) &&
+             hasOnlyAllowedFields(['studentName', 'placements', 'score', 'submittedAt']) &&
+             isValidString(data.studentName, 1, 100) &&
+             data.placements is map && data.placements.size() <= 100 &&
+             data.score is number && data.score >= 0 &&
+             data.submittedAt is timestamp;
+    }
+
+    function isActivityOwner(activityId) {
+      let activity = get(/databases/$(database)/documents/activities/$(activityId));
+      return activity != null && isAuthenticated() && request.auth.uid == activity.data.ownerId;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /activities/{activityId} {
+      // Anyone can read an activity to participate in it
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && 
+                    isValidActivity() && 
+                    isOwner(request.resource.data.ownerId);
+                    
+      allow update: if isAuthenticated() && 
+                    isValidActivity() && 
+                    isOwner(resource.data.ownerId) && 
+                    request.resource.data.ownerId == resource.data.ownerId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+                    
+      allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+
+      match /responses/{responseId} {
+        // Only the activity owner can read responses
+        allow read: if isActivityOwner(activityId);
+        
+        // Anyone can submit a response
+        allow create: if isValidResponse();
+        
+        allow update, delete: if false;
+      }
+    }
+  }
+}

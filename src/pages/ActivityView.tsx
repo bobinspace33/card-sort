@@ -1,0 +1,357 @@
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { Activity, CardData } from '../types';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
+import { useDroppable } from '@dnd-kit/core';
+import { useDraggable } from '@dnd-kit/core';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { RotateCcw, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
+
+const DroppableCategory: React.FC<{ id: string, title: string, children: React.ReactNode, isOver: boolean }> = ({ id, title, children, isOver }) => {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-[200px] p-4 rounded-3xl border-2 transition-colors ${
+        isOver ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200 bg-white/50'
+      }`}
+    >
+      <h3 className="text-lg font-semibold text-slate-700 mb-4 text-center">{title}</h3>
+      <div className="flex flex-wrap gap-4 justify-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: () => void, isFlipped: boolean }> = ({ card, isDragging, onClick, isFlipped }) => {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: card.id,
+    data: card,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    zIndex: isDragging ? 50 : 1,
+  } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={(e) => {
+        // Prevent drag from triggering click if they moved
+        if (e.defaultPrevented) return;
+        onClick?.();
+      }}
+      className={`relative w-48 h-36 cursor-grab active:cursor-grabbing perspective-1000 ${isDragging ? 'opacity-50' : ''}`}
+    >
+      <motion.div
+        className="w-full h-full relative preserve-3d"
+        animate={{ rotateY: isFlipped ? 180 : 0 }}
+        transition={{ duration: 0.4, type: "spring", stiffness: 260, damping: 20 }}
+      >
+        {/* Front */}
+        <div className="absolute w-full h-full backface-hidden rounded-2xl overflow-hidden shadow-md bg-white border-2 border-emerald-100 flex flex-col items-center justify-center p-2">
+          {card.frontImage && (
+            <div className="w-full h-full absolute inset-0">
+              <img src={card.frontImage} alt="Card front" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+          )}
+          <div className="relative z-10 text-center font-medium text-slate-800 drop-shadow-sm bg-white/80 px-2 py-1 rounded-lg">
+            {card.frontText}
+          </div>
+        </div>
+
+        {/* Back */}
+        <div className="absolute w-full h-full backface-hidden rounded-2xl overflow-hidden shadow-md bg-amber-50 border-2 border-amber-200 flex flex-col items-center justify-center p-2 [transform:rotateY(180deg)]">
+          {card.backImage && (
+            <div className="w-full h-full absolute inset-0">
+              <img src={card.backImage} alt="Card back" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+          )}
+          <div className="relative z-10 text-center font-medium text-slate-800 drop-shadow-sm bg-white/80 px-2 py-1 rounded-lg">
+            {card.backText || "No back text"}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+export default function ActivityView() {
+  const { activityId } = useParams();
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [studentName, setStudentName] = useState('');
+  const [hasStarted, setHasStarted] = useState(false);
+  
+  const [placements, setPlacements] = useState<Record<string, string>>({});
+  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  const [showResultDialog, setShowResultDialog] = useState(false);
+  const [resultData, setResultData] = useState<{ score: number, incorrectCount: number } | null>(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } })
+  );
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      if (!activityId) return;
+      try {
+        const docRef = doc(db, 'activities', activityId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as Activity;
+          setActivity({ id: docSnap.id, ...data });
+          
+          // Initialize placements to 'deck'
+          const initialPlacements: Record<string, string> = {};
+          data.cards.forEach(c => {
+            initialPlacements[c.id] = 'deck';
+          });
+          setPlacements(initialPlacements);
+        } else {
+          toast.error('Activity not found');
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, `activities/${activityId}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchActivity();
+  }, [activityId]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragOver = (event: any) => {
+    setActiveCategory(event.over?.id as string || null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setActiveCategory(null);
+
+    if (over && over.id !== placements[active.id as string]) {
+      setPlacements(prev => ({
+        ...prev,
+        [active.id as string]: over.id as string
+      }));
+    }
+  };
+
+  const handleFlip = (id: string) => {
+    setFlippedCards(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleReset = () => {
+    if (!activity) return;
+    const initialPlacements: Record<string, string> = {};
+    activity.cards.forEach(c => {
+      initialPlacements[c.id] = 'deck';
+    });
+    setPlacements(initialPlacements);
+    setFlippedCards({});
+  };
+
+  const handleSubmit = async () => {
+    if (!activity) return;
+    
+    // Check if all cards are placed
+    const unplaced = Object.values(placements).filter(p => p === 'deck').length;
+    if (unplaced > 0) {
+      toast.error(`Please place all cards. ${unplaced} remaining.`);
+      return;
+    }
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+
+    activity.cards.forEach(card => {
+      if (placements[card.id] === card.correctCategory) {
+        correctCount++;
+      } else {
+        incorrectCount++;
+      }
+    });
+
+    const score = Math.round((correctCount / activity.cards.length) * 100);
+    setResultData({ score, incorrectCount });
+
+    try {
+      await addDoc(collection(db, `activities/${activity.id}/responses`), {
+        studentName,
+        placements,
+        score,
+        submittedAt: serverTimestamp()
+      });
+      setIsSubmitted(true);
+      setShowResultDialog(true);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `activities/${activity.id}/responses`);
+      toast.error('Failed to submit response');
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (!activity) return <div className="p-8 text-center">Activity not found</div>;
+
+  if (!hasStarted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4 bg-emerald-50/30">
+        <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm rounded-3xl">
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-3xl font-bold text-emerald-800">{activity.title}</CardTitle>
+            <CardDescription className="text-emerald-600/80">Enter your name to begin the card sort.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            <Input
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Your Name"
+              className="rounded-xl text-lg p-6"
+            />
+            <Button 
+              onClick={() => {
+                if (studentName.trim()) setHasStarted(true);
+                else toast.error('Please enter your name');
+              }} 
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg shadow-lg shadow-emerald-500/20"
+            >
+              Start Activity
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const activeCard = activeId ? activity.cards.find(c => c.id === activeId) : null;
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#f5f7f5]">
+      <header className="bg-white px-6 py-4 shadow-sm flex justify-between items-center z-10">
+        <div>
+          <h1 className="text-xl font-bold text-emerald-900">{activity.title}</h1>
+          <p className="text-sm text-slate-500">Student: {studentName}</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={handleReset} disabled={isSubmitted} className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+            <RotateCcw className="w-4 h-4 mr-2" /> Reset
+          </Button>
+          <Button onClick={handleSubmit} disabled={isSubmitted} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-md">
+            <CheckCircle2 className="w-4 h-4 mr-2" /> Submit
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex-1 p-6 overflow-hidden flex flex-col">
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+          
+          {/* Categories Area */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8 overflow-y-auto max-h-[50vh] p-2">
+            {activity.categories.map(cat => (
+              <DroppableCategory key={cat} id={cat} title={cat} isOver={activeCategory === cat}>
+                {activity.cards.filter(c => placements[c.id] === cat).map(card => (
+                  <SortableCard 
+                    key={card.id} 
+                    card={card} 
+                    isFlipped={!!flippedCards[card.id]}
+                    onClick={() => handleFlip(card.id)}
+                  />
+                ))}
+              </DroppableCategory>
+            ))}
+          </div>
+
+          {/* Deck Area */}
+          <div className="mt-auto">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Unsorted Cards</h3>
+            <DroppableCategory id="deck" title="" isOver={activeCategory === 'deck'}>
+              <div className="flex flex-wrap gap-4 justify-center min-h-[160px] p-4 bg-white/40 rounded-3xl border-2 border-dashed border-slate-300">
+                {activity.cards.filter(c => placements[c.id] === 'deck').map(card => (
+                  <SortableCard 
+                    key={card.id} 
+                    card={card} 
+                    isFlipped={!!flippedCards[card.id]}
+                    onClick={() => handleFlip(card.id)}
+                  />
+                ))}
+                {activity.cards.filter(c => placements[c.id] === 'deck').length === 0 && (
+                  <div className="text-slate-400 flex items-center justify-center w-full h-full">
+                    All cards sorted!
+                  </div>
+                )}
+              </div>
+            </DroppableCategory>
+          </div>
+
+          <DragOverlay dropAnimation={{ duration: 250, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+            {activeCard ? (
+              <SortableCard card={activeCard} isDragging isFlipped={!!flippedCards[activeCard.id]} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </main>
+
+      <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
+        <DialogContent className="rounded-3xl sm:rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-center">Activity Complete!</DialogTitle>
+            <DialogDescription className="text-center text-lg pt-4">
+              {activity.checkAnswers && resultData && resultData.incorrectCount > 0 ? (
+                <span className="text-amber-600 font-medium">
+                  You have {resultData.incorrectCount} incorrect card{resultData.incorrectCount > 1 ? 's' : ''}.
+                </span>
+              ) : activity.checkAnswers && resultData && resultData.incorrectCount === 0 ? (
+                <span className="text-emerald-600 font-medium">
+                  Perfect! All cards are in the correct category.
+                </span>
+              ) : (
+                <span>Your response has been recorded.</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {activity.showScore && resultData && (
+            <div className="py-8 flex justify-center">
+              <div className="text-center">
+                <div className="text-6xl font-light text-emerald-500">{resultData.score}%</div>
+                <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest font-semibold">Final Score</div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="sm:justify-center">
+            <Button onClick={() => setShowResultDialog(false)} className="rounded-full px-8 bg-slate-900 text-white hover:bg-slate-800">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

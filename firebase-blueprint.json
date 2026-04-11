@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "Activity": {
+      "title": "Activity",
+      "description": "A card sort activity created by a facilitator.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the activity."
+        },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The categories for the card sort."
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "frontText": { "type": "string" },
+              "frontImage": { "type": "string" },
+              "backText": { "type": "string" },
+              "backImage": { "type": "string" },
+              "correctCategory": { "type": "string" }
+            },
+            "required": ["id", "frontText", "correctCategory"]
+          },
+          "description": "The cards to be sorted."
+        },
+        "checkAnswers": {
+          "type": "boolean",
+          "description": "Whether to check answers after submission."
+        },
+        "showScore": {
+          "type": "boolean",
+          "description": "Whether to show the score after submission."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the facilitator who created the activity."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the activity was created."
+        }
+      },
+      "required": ["title", "categories", "cards", "checkAnswers", "showScore", "ownerId", "createdAt"]
+    },
+    "Response": {
+      "title": "Response",
+      "description": "A student's response to a card sort activity.",
+      "type": "object",
+      "properties": {
+        "studentName": {
+          "type": "string",
+          "description": "The name of the student."
+        },
+        "placements": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "A map of card ID to category name."
+        },
+        "score": {
+          "type": "number",
+          "description": "The student's score."
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the response was submitted."
+        }
+      },
+      "required": ["studentName", "placements", "score", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/Activity" },
+      "description": "Stores the card sort activities."
+    },
+    "/activities/{activityId}/responses/{responseId}": {
+      "schema": { "$ref": "#/entities/Response" },
+      "description": "Stores the student responses for an activity."
+    }
+  }
+}
