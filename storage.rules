@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Upload path from the app: images/{uid}/{uuid}_{originalFileName}
+// Students load card images via Firebase download URLs (tokenized); those reads
+// bypass rule checks. Direct reads are allowed only for objects under images/
+// so shared activities can use plain Storage URLs if ever needed.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /images/{userId}/{fileName} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow update, delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+  }
+}
