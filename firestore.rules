@@ -127,9 +127,10 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
 
       match /responses/{responseId} {
-        // Only the activity owner can read responses
-        allow read: if isActivityOwner(activityId);
-        
+        // Students need read access to compute anonymous class stats (per-card % correct) after submit.
+        // Documents include studentName; do not surface names in the student results UI.
+        allow read: if true;
+
         // Anyone can submit a response
         allow create: if isValidResponse();
         

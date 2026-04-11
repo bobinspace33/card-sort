@@ -365,7 +365,7 @@ export default function CreateActivity() {
 
             <div className="space-y-2">
               <Label>Background image (optional)</Label>
-              <p className="text-sm text-slate-500">Shown behind the student activity at 30% opacity.</p>
+              <p className="text-sm text-slate-500">Shown behind the student activity at 20% opacity.</p>
               <div className="flex gap-2 items-center flex-wrap">
                 <ImageIcon className="w-5 h-5 text-slate-400 shrink-0" />
                 <Input
@@ -390,9 +390,9 @@ export default function CreateActivity() {
               </div>
               {backgroundImage.trim() ? (
                 <div className="mt-2 rounded-xl border border-slate-200 overflow-hidden max-w-xs aspect-video bg-slate-100 relative">
-                  <img src={backgroundImage} alt="" className="w-full h-full object-cover opacity-30" />
+                  <img src={backgroundImage} alt="" className="h-full w-full object-contain opacity-20 grayscale" />
                   <span className="absolute bottom-2 left-2 text-[10px] font-medium text-slate-600 bg-white/90 px-2 py-0.5 rounded">
-                    Preview at 30% opacity
+                    Preview at 20% opacity
                   </span>
                 </div>
               ) : null}
@@ -408,8 +408,10 @@ export default function CreateActivity() {
 
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
               <div className="space-y-0.5">
-                <Label>Show Score</Label>
-                <p className="text-sm text-slate-500">Display final score after submission</p>
+                <Label>Show class results</Label>
+                <p className="text-sm text-slate-500">
+                  After submit, show a bar for each card with the % of the class who placed it correctly
+                </p>
               </div>
               <Switch checked={showScore} onCheckedChange={setShowScore} />
             </div>
