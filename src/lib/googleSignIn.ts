@@ -1,4 +1,4 @@
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 import { auth } from '../firebase';
 import { toast } from 'sonner';
 
@@ -20,20 +20,6 @@ function authErrorMessage(code: string, message?: string): string {
       return 'Firebase auth error. Confirm firebase-applet-config.json matches your Firebase web app and that the Google provider is enabled.';
     default:
       return message || code || 'Sign-in failed';
-  }
-}
-
-/** Call once on app load to finish signInWithRedirect. */
-export async function finalizeGoogleRedirectSignIn(): Promise<void> {
-  try {
-    const result = await getRedirectResult(auth);
-    if (result?.user) {
-      toast.success('Signed in with Google');
-    }
-  } catch (error: unknown) {
-    const err = error as { code?: string; message?: string };
-    toast.error(authErrorMessage(err.code ?? '', err.message));
-    console.error('Google redirect sign-in error:', error);
   }
 }
 

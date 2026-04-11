@@ -6,16 +6,21 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 import Home from './pages/Home';
 import FacilitatorSetup from './pages/FacilitatorSetup';
 import CreateActivity from './pages/CreateActivity';
 import ActivityView from './pages/ActivityView';
 import ActivityResults from './pages/ActivityResults';
-import { finalizeGoogleRedirectSignIn } from './lib/googleSignIn';
 
-function GoogleRedirectCompletion() {
+const REDIRECT_OK_KEY = 'cardSortGoogleRedirectOk';
+
+function PostGoogleRedirectToast() {
   useEffect(() => {
-    void finalizeGoogleRedirectSignIn();
+    if (sessionStorage.getItem(REDIRECT_OK_KEY)) {
+      sessionStorage.removeItem(REDIRECT_OK_KEY);
+      toast.success('Signed in with Google');
+    }
   }, []);
   return null;
 }
@@ -23,7 +28,7 @@ function GoogleRedirectCompletion() {
 export default function App() {
   return (
     <BrowserRouter>
-      <GoogleRedirectCompletion />
+      <PostGoogleRedirectToast />
       <div className="min-h-screen bg-[#f5f7f5] text-slate-900 font-sans">
         <Routes>
           <Route path="/" element={<Home />} />

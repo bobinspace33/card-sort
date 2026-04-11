@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseOptions } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import fileConfig from '../firebase-applet-config.json';
@@ -31,6 +31,9 @@ export const db =
     ? getFirestore(app, firestoreDatabaseId)
     : getFirestore(app);
 export const auth = getAuth(app);
+void setPersistence(auth, browserLocalPersistence).catch(() => {
+  /* ignore: some private modes reject persistence */
+});
 
 const storageBucket = (appOptions as FirebaseOptions).storageBucket;
 /** Explicit gs:// bucket avoids some wrong-default bucket issues with newer *.firebasestorage.app names. */
