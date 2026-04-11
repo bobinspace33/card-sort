@@ -20,18 +20,30 @@ const DroppableCategory: React.FC<{
   children: React.ReactNode;
   isOver: boolean;
   className?: string;
-}> = ({ id, title, children, isOver, className = '' }) => {
+  /** Categories use a fixed max height and wrap cards into extra columns; deck is a loose drop zone. */
+  layout?: 'category' | 'deck';
+}> = ({ id, title, children, isOver, className = '', layout = 'category' }) => {
   const { setNodeRef } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex h-full min-h-[200px] flex-col p-4 rounded-3xl border-2 transition-colors ${
-        isOver ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200 bg-white/50'
-      } ${className}`}
-    >
-      <h3 className="mb-4 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
-      <div className="flex min-h-0 flex-1 flex-wrap content-start items-start justify-center gap-4">
+  const shell = `rounded-3xl border-2 transition-colors ${
+    isOver ? 'border-emerald-400 bg-emerald-50/50' : 'border-slate-200 bg-white/50'
+  } ${className}`;
+
+  if (layout === 'deck') {
+    return (
+      <div ref={setNodeRef} className={shell}>
         {children}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={setNodeRef} className={`flex h-full min-h-0 max-h-full flex-col p-4 ${shell}`}>
+      <h3 className="mb-3 shrink-0 text-center text-lg font-semibold text-slate-700">{title}</h3>
+      {/* Column-direction flex + wrap + bounded height → new columns to the right as cards fill vertical space */}
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
+        <div className="flex h-full max-h-full w-max flex-col flex-wrap content-start items-start gap-4">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -59,7 +71,7 @@ const SortableCard: React.FC<{ card: CardData, isDragging?: boolean, onClick?: (
         if (e.defaultPrevented) return;
         onClick?.();
       }}
-      className={`relative w-48 h-36 cursor-grab active:cursor-grabbing perspective-1000 ${isDragging ? 'opacity-50' : ''}`}
+      className={`relative h-36 w-48 shrink-0 cursor-grab active:cursor-grabbing perspective-1000 ${isDragging ? 'opacity-50' : ''}`}
     >
       <motion.div
         className="w-full h-full relative preserve-3d"
@@ -302,49 +314,57 @@ export default function ActivityView() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-hidden flex flex-col">
+      <main className="flex flex-1 min-h-0 flex-col overflow-hidden p-4 sm:p-6">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-          
-          {/* Categories: single horizontal row, equal-height columns, scroll if many */}
-          <div className="mb-8 flex max-h-[50vh] flex-row items-stretch gap-4 overflow-x-auto overflow-y-auto p-2">
-            {activity.categories.map((cat) => (
-              <div key={cat} className="flex h-auto w-48 shrink-0 sm:w-52">
-                <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
-                  {activity.cards
-                    .filter((c) => placements[c.id] === cat)
-                    .map((card) => (
-                      <SortableCard
-                        key={card.id}
-                        card={card}
-                        isFlipped={!!flippedCards[card.id]}
-                        onClick={() => handleFlip(card.id)}
-                      />
-                    ))}
-                </DroppableCategory>
-              </div>
-            ))}
-          </div>
-
-          {/* Deck Area */}
-          <div className="mt-auto">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Unsorted Cards</h3>
-            <DroppableCategory id="deck" title="" isOver={activeCategory === 'deck'}>
-              <div className="flex flex-wrap gap-4 justify-center min-h-[160px] p-4 bg-white/40 rounded-3xl border-2 border-dashed border-slate-300">
-                {activity.cards.filter(c => placements[c.id] === 'deck').map(card => (
-                  <SortableCard 
-                    key={card.id} 
-                    card={card} 
-                    isFlipped={!!flippedCards[card.id]}
-                    onClick={() => handleFlip(card.id)}
-                  />
-                ))}
-                {activity.cards.filter(c => placements[c.id] === 'deck').length === 0 && (
-                  <div className="text-slate-400 flex items-center justify-center w-full h-full">
-                    All cards sorted!
+          <div className="flex min-h-0 flex-1 flex-col gap-6">
+            {/* Categories: centered row; height bounded by flex layout; each category grows wider as cards wrap into extra columns */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex h-full min-h-0 flex-1 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]">
+                <div className="flex h-full min-h-0 min-w-full justify-center px-1 py-1">
+                  <div className="flex h-full max-h-full w-max items-stretch gap-4">
+                  {activity.categories.map((cat) => (
+                    <div
+                      key={cat}
+                      className="flex h-full max-h-full min-h-0 min-w-[12.5rem] shrink-0 self-stretch sm:min-w-[13rem]"
+                    >
+                      <DroppableCategory id={cat} title={cat} isOver={activeCategory === cat} className="w-full">
+                        {activity.cards
+                          .filter((c) => placements[c.id] === cat)
+                          .map((card) => (
+                            <SortableCard
+                              key={card.id}
+                              card={card}
+                              isFlipped={!!flippedCards[card.id]}
+                              onClick={() => handleFlip(card.id)}
+                            />
+                          ))}
+                      </DroppableCategory>
+                    </div>
+                  ))}
                   </div>
-                )}
+                </div>
               </div>
-            </DroppableCategory>
+            </div>
+
+            {/* Deck Area */}
+            <div className="shrink-0">
+              <h3 className="mb-4 px-2 text-sm font-semibold uppercase tracking-wider text-slate-500">Unsorted Cards</h3>
+              <DroppableCategory id="deck" title="" layout="deck" isOver={activeCategory === 'deck'}>
+                <div className="flex min-h-[160px] flex-wrap content-start justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-300 bg-white/40 p-4">
+                  {activity.cards.filter(c => placements[c.id] === 'deck').map(card => (
+                    <SortableCard
+                      key={card.id}
+                      card={card}
+                      isFlipped={!!flippedCards[card.id]}
+                      onClick={() => handleFlip(card.id)}
+                    />
+                  ))}
+                  {activity.cards.filter(c => placements[c.id] === 'deck').length === 0 && (
+                    <div className="flex h-full w-full items-center justify-center text-slate-400">All cards sorted!</div>
+                  )}
+                </div>
+              </DroppableCategory>
+            </div>
           </div>
 
           <DragOverlay dropAnimation={{ duration: 250, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
