@@ -59,6 +59,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/setup" element={<FacilitatorSetup />} />
           <Route path="/create" element={<CreateActivity />} />
+          <Route path="/edit/:activityId" element={<CreateActivity />} />
           <Route path="/play/:activityId" element={<ActivityView />} />
           <Route path="/activity/:activityId" element={<ActivityView />} />
           <Route path="/activity/:activityId/results" element={<ActivityResults />} />

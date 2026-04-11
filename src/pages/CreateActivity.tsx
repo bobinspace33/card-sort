@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { auth, db, storage } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, type UploadMetadata } from 'firebase/storage';
 import { CardData } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,6 +16,9 @@ import { toast } from 'sonner';
 
 export default function CreateActivity() {
   const navigate = useNavigate();
+  const { activityId } = useParams<{ activityId: string }>();
+  const isEditMode = Boolean(activityId);
+
   const [title, setTitle] = useState('');
   const [categories, setCategories] = useState<string[]>(['Category 1', 'Category 2']);
   const [cards, setCards] = useState<CardData[]>([]);
@@ -24,8 +27,78 @@ export default function CreateActivity() {
   const [backgroundImage, setBackgroundImage] = useState('');
   const [bulkCardCount, setBulkCardCount] = useState('');
   const [saving, setSaving] = useState(false);
+  /** Firestore fields that must stay unchanged on update (see firestore.rules). */
+  const [editCreatedAt, setEditCreatedAt] = useState<unknown>(null);
+  const [editOwnerId, setEditOwnerId] = useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(isEditMode);
 
   const MAX_CARDS = 100;
+
+  useEffect(() => {
+    if (!activityId) {
+      setBootstrapping(false);
+      return;
+    }
+
+    let cancelled = false;
+    setBootstrapping(true);
+
+    void (async () => {
+      try {
+        await auth.authStateReady();
+        if (cancelled) return;
+        const user = auth.currentUser;
+        if (!user) {
+          toast.error('Sign in to edit activities');
+          navigate('/', { replace: true });
+          return;
+        }
+        const snap = await getDoc(doc(db, 'activities', activityId));
+        if (cancelled) return;
+        if (!snap.exists()) {
+          toast.error('Activity not found');
+          navigate('/', { replace: true });
+          return;
+        }
+        const data = snap.data();
+        if (data.ownerId !== user.uid) {
+          toast.error('You can only edit your own activities');
+          navigate('/', { replace: true });
+          return;
+        }
+        setTitle(typeof data.title === 'string' ? data.title : '');
+        const cats = Array.isArray(data.categories) ? (data.categories as string[]) : [];
+        setCategories(cats.length >= 2 ? cats : ['Category 1', 'Category 2']);
+        const firstCat = (cats.length >= 2 ? cats : ['Category 1', 'Category 2'])[0] ?? '';
+        const rawCards = Array.isArray(data.cards) ? data.cards : [];
+        setCards(
+          rawCards.map((c: Record<string, unknown>) => ({
+            id: typeof c.id === 'string' && c.id ? c.id : uuidv4(),
+            frontText: typeof c.frontText === 'string' ? c.frontText : '',
+            frontImage: typeof c.frontImage === 'string' ? c.frontImage : '',
+            backText: typeof c.backText === 'string' ? c.backText : '',
+            backImage: typeof c.backImage === 'string' ? c.backImage : '',
+            correctCategory: typeof c.correctCategory === 'string' ? c.correctCategory : firstCat,
+          })),
+        );
+        setCheckAnswers(Boolean(data.checkAnswers));
+        setShowScore(Boolean(data.showScore));
+        setBackgroundImage(typeof data.backgroundImage === 'string' ? data.backgroundImage : '');
+        setEditCreatedAt(data.createdAt);
+        setEditOwnerId(typeof data.ownerId === 'string' ? data.ownerId : null);
+      } catch (e) {
+        console.error('Load activity for edit:', e);
+        toast.error('Could not load activity');
+        navigate('/', { replace: true });
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activityId, navigate]);
 
   const makeEmptyCard = (): CardData => ({
     id: uuidv4(),
@@ -181,6 +254,26 @@ export default function CreateActivity() {
 
     setSaving(true);
     try {
+      if (isEditMode && activityId) {
+        if (!editOwnerId || editCreatedAt == null) {
+          toast.error('Activity is still loading — try again in a moment');
+          return;
+        }
+        await updateDoc(doc(db, 'activities', activityId), {
+          title,
+          categories,
+          cards,
+          checkAnswers,
+          showScore,
+          backgroundImage: backgroundImage.trim(),
+          ownerId: editOwnerId,
+          createdAt: editCreatedAt,
+        });
+        toast.success('Activity updated');
+        navigate('/', { replace: true });
+        return;
+      }
+
       const docRef = await addDoc(collection(db, 'activities'), {
         title,
         categories,
@@ -193,7 +286,7 @@ export default function CreateActivity() {
       });
       navigate('/', { replace: true, state: { createdActivityId: docRef.id } });
     } catch (error) {
-      console.error('Create activity:', error);
+      console.error(isEditMode ? 'Update activity:' : 'Create activity:', error);
       toast.error(
         'Could not save (Firestore permission denied). In Firebase Console → Firestore Database → Rules, paste the rules from firestore.rules in this project and click Publish.',
         { duration: 14_000 },
@@ -203,13 +296,21 @@ export default function CreateActivity() {
     }
   };
 
+  if (bootstrapping) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 md:p-12 flex flex-col items-center justify-center min-h-[40vh] text-slate-600">
+        <p className="text-lg">Loading activity…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6 md:p-12">
       <div className="flex items-center mb-8">
         <Button variant="ghost" onClick={() => navigate('/')} className="mr-4 rounded-full w-10 h-10 p-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="text-3xl font-bold text-emerald-900">Create Card Sort</h1>
+        <h1 className="text-3xl font-bold text-emerald-900">{isEditMode ? 'Edit Card Sort' : 'Create Card Sort'}</h1>
       </div>
 
       <div className="space-y-8">
@@ -472,7 +573,13 @@ export default function CreateActivity() {
 
         <div className="flex justify-end pt-4 pb-12">
           <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-8 py-6 text-lg shadow-lg">
-            {saving ? 'Saving...' : <><Save className="w-5 h-5 mr-2" /> Save Activity</>}
+            {saving ? (
+              'Saving...'
+            ) : (
+              <>
+                <Save className="w-5 h-5 mr-2" /> {isEditMode ? 'Save changes' : 'Save Activity'}
+              </>
+            )}
           </Button>
         </div>
       </div>

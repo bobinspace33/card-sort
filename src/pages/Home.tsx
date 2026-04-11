@@ -7,7 +7,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Activity } from '../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, BarChart, Play, Link2 } from 'lucide-react';
+import { Plus, BarChart, Play, Link2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPublicPlayUrl } from '../lib/activityUrls';
 import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
@@ -319,6 +319,15 @@ export default function Home() {
               </CardHeader>
               <CardContent className="p-4 flex flex-wrap gap-2 items-center justify-between bg-white">
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => navigate(`/edit/${activity.id}`)}
+                    className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    title="Change title, cards, categories, and settings"
+                  >
+                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
