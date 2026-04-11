@@ -30,6 +30,10 @@ function PostGoogleRedirectToast() {
             `Firebase blocked sign-in for “${host}”. Open Firebase Console → Authentication → Settings → Authorized domains → Add domain → enter: ${host}`,
             { duration: 25_000 },
           );
+        } else if (code === 'auth/missing-redirect-result') {
+          toast.error(message || 'Returned from Google without a session — check Authorized domains and OAuth JavaScript origins.', {
+            duration: 28_000,
+          });
         } else {
           toast.error(message || code || 'Google sign-in failed after redirect', { duration: 14_000 });
         }

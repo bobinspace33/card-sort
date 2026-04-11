@@ -195,6 +195,36 @@ export default function Home() {
                 Open facilitator setup
               </Link>
             </p>
+            <details className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-left text-xs text-slate-600">
+              <summary className="cursor-pointer font-medium text-slate-700 select-none">
+                Stuck after choosing your Google account?
+              </summary>
+              <ol className="mt-2 list-decimal pl-4 space-y-2 leading-relaxed">
+                <li>
+                  Firebase Console (project <span className="font-mono">{firebaseProjectId || '…'}</span>) →{' '}
+                  <strong>Authentication</strong> → <strong>Settings</strong> → <strong>Authorized domains</strong> → add{' '}
+                  <span className="font-mono">{typeof window !== 'undefined' ? window.location.hostname : ''}</span>
+                  .
+                </li>
+                <li>
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-emerald-800 underline underline-offset-2"
+                  >
+                    Google Cloud Console → Credentials
+                  </a>
+                  : open the <strong>Web client</strong> (often named like your Firebase project) →{' '}
+                  <strong>Authorized JavaScript origins</strong> → add{' '}
+                  <span className="font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
+                  .
+                </li>
+                <li>
+                  Use a normal browser window (not private/incognito), then try again.
+                </li>
+              </ol>
+            </details>
           </CardContent>
         </Card>
         <p className="max-w-md text-center text-sm text-slate-500">
