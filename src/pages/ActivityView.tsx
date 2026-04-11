@@ -227,6 +227,14 @@ export default function ActivityView() {
     useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } })
   );
 
+  /** Must run every render (before any conditional return) — used only on the play screen. */
+  const categoryLayoutKey = useMemo(() => {
+    if (!activity) return '';
+    return activity.categories
+      .map((c) => `${c}:${activity.cards.filter((x) => placements[x.id] === c).length}`)
+      .join('|');
+  }, [activity, placements]);
+
   useEffect(() => {
     const fetchActivity = async () => {
       if (!activityId) return;
@@ -376,14 +384,6 @@ export default function ActivityView() {
   }
 
   const activeCard = activeId ? activity.cards.find(c => c.id === activeId) : null;
-
-  const categoryLayoutKey = useMemo(
-    () =>
-      activity.categories
-        .map((c) => `${c}:${activity.cards.filter((x) => placements[x.id] === c).length}`)
-        .join('|'),
-    [activity.cards, activity.categories, placements],
-  );
 
   return (
     <ActivityShell backgroundImage={activity.backgroundImage} variant="play">
