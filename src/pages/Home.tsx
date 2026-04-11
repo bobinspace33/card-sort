@@ -235,6 +235,25 @@ export default function Home() {
                 </li>
               </ol>
             </details>
+            <details className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-left text-xs text-slate-600">
+              <summary className="cursor-pointer font-medium text-slate-700 select-none">
+                Flashing red error when you click sign-in?
+              </summary>
+              <ol className="mt-2 list-decimal pl-4 space-y-2 leading-relaxed">
+                <li>
+                  Open DevTools <strong>before</strong> clicking sign-in. In the <strong>Console</strong> tab, turn on{' '}
+                  <strong>Preserve log</strong> (checkbox at the top). Repeat for the <strong>Network</strong> tab — many
+                  “GET …” lines are listed there, not in Console.
+                </li>
+                <li>
+                  Click sign-in again. Any failed request stays in the list; click it and copy the URL or status code.
+                </li>
+                <li>
+                  In Console, filter by <span className="font-mono">CardSort</span> — this app logs{' '}
+                  <span className="font-mono">[CardSort Auth]</span> lines that do not disappear the same way.
+                </li>
+              </ol>
+            </details>
           </CardContent>
         </Card>
         <p className="max-w-md text-center text-sm text-slate-500">

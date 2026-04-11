@@ -39,7 +39,8 @@ function persistGoogleAuthFailure(error: unknown) {
     JSON.stringify({ code, message, at: Date.now() }),
   );
   toast.error(authErrorMessage(code, message));
-  console.error('Google sign-in error:', error);
+  // Stable line you can filter (Console → filter "CardSort"); survives better than a lone GET line.
+  console.error('[CardSort Auth] Sign-in failed', { code, message, error });
 }
 
 /**
@@ -48,6 +49,9 @@ function persistGoogleAuthFailure(error: unknown) {
  * Google window can finish without hanging.
  */
 export async function signInWithGooglePopup(): Promise<void> {
+  console.info(
+    '[CardSort Auth] Opening Google sign-in… If a red line flashes away, turn on Preserve log (Console and Network tabs), then try again.',
+  );
   try {
     await signInWithPopup(auth, googleProvider());
     sessionStorage.removeItem(CARD_SORT_LAST_GOOGLE_AUTH_ERR);
