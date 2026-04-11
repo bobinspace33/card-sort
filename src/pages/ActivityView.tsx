@@ -335,6 +335,11 @@ export default function ActivityView() {
   if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (!activity) return <div className="p-8 text-center">Activity not found</div>;
 
+  const tryStartActivity = () => {
+    if (studentName.trim()) setHasStarted(true);
+    else toast.error('Please enter your name');
+  };
+
   if (!hasStarted) {
     return (
       <ActivityShell backgroundImage={activity.backgroundImage} variant="welcome">
@@ -348,14 +353,17 @@ export default function ActivityView() {
             <Input
               value={studentName}
               onChange={(e) => setStudentName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  tryStartActivity();
+                }
+              }}
               placeholder="Your Name"
               className="rounded-xl text-lg p-6"
             />
-            <Button 
-              onClick={() => {
-                if (studentName.trim()) setHasStarted(true);
-                else toast.error('Please enter your name');
-              }} 
+            <Button
+              onClick={tryStartActivity}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white rounded-full py-6 text-lg shadow-lg shadow-emerald-500/20"
             >
               Start Activity
