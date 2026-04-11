@@ -44,9 +44,10 @@ function persistGoogleAuthFailure(error: unknown) {
 }
 
 /**
- * Popup sign-in (recommended on production). Requires the host to send
- * `Cross-Origin-Opener-Policy: same-origin-allow-popups` (see vercel.json) so the
- * Google window can finish without hanging.
+ * Popup sign-in. Firebase polls `popup.closed` / calls `popup.close()`; any stricter
+ * COOP (e.g. `same-origin`) breaks that. Vercel sends `Cross-Origin-Opener-Policy: unsafe-none`
+ * (see vercel.json) so the OAuth popup can finish. If popups still fail, use
+ * {@link signInWithGoogleRedirect}.
  */
 export async function signInWithGooglePopup(): Promise<void> {
   console.info(
