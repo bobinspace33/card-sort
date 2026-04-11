@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { auth, db, firebaseAuthDomain, firebaseProjectId } from '../firebase';
+import { auth, db, firebaseAuthDomain, firebaseProjectId, handleFirestoreError, OperationType } from '../firebase';
 import { CARD_SORT_LAST_GOOGLE_AUTH_ERR } from '../lib/authSessionKeys';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, deleteDoc } from 'firebase/firestore';
 import { Activity } from '../types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, BarChart, Play, Link2, Pencil, KeyRound } from 'lucide-react';
+import { Plus, BarChart, Play, Link2, Pencil, KeyRound, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getPublicPlayUrl } from '../lib/activityUrls';
 import { signInWithGooglePopup, signInWithGoogleRedirect } from '../lib/googleSignIn';
@@ -23,6 +23,7 @@ export default function Home() {
   const [activitiesLoadTimedOut, setActivitiesLoadTimedOut] = useState(false);
   /** Last Firebase auth error (redirect return or blocked redirect) — shown until dismiss or successful sign-in. */
   const [lastAuthErr, setLastAuthErr] = useState<{ code: string; message: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -144,6 +145,34 @@ export default function Home() {
   };
   const handleLoginRedirect = () => {
     void signInWithGoogleRedirect();
+  };
+
+  const handleDeleteActivity = async (activity: Activity) => {
+    if (!activity.id) return;
+    const confirmed = window.confirm(
+      `Delete “${activity.title}”? This removes the activity and all submitted responses. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setDeletingId(activity.id);
+    try {
+      const responsesSnap = await getDocs(collection(db, `activities/${activity.id}/responses`));
+      const responseRefs = responsesSnap.docs.map((d) => d.ref);
+      const chunkSize = 400;
+      for (let i = 0; i < responseRefs.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        for (const ref of responseRefs.slice(i, i + chunkSize)) {
+          batch.delete(ref);
+        }
+        await batch.commit();
+      }
+      await deleteDoc(doc(db, 'activities', activity.id));
+      toast.success('Activity deleted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `activities/${activity.id}`);
+      toast.error('Could not delete activity. If rules were just updated, deploy firestore.rules and try again.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-600">Loading…</div>;
@@ -375,32 +404,38 @@ export default function Home() {
                 >
                   <BarChart className="w-4 h-4 mr-2" /> Results
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={deletingId === activity.id}
+                  onClick={() => void handleDeleteActivity(activity)}
+                  className="text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full"
+                  title="Delete activity and all responses"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {deletingId === activity.id ? 'Deleting…' : 'Delete'}
+                </Button>
               </CardContent>
-              {activity.id && (
-                <div className="space-y-2 px-4 pb-3">
-                  {activity.studentCode ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[11px] font-mono font-semibold tracking-wider text-emerald-900">
-                        <KeyRound className="h-3 w-3" aria-hidden />
-                        {activity.studentCode}
-                      </span>
-                      <button
-                        type="button"
-                        className="text-[11px] font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(activity.studentCode!);
-                          toast.success('Student code copied');
-                        }}
-                      >
-                        Copy code
-                      </button>
-                    </div>
-                  ) : null}
-                  <div className="truncate font-mono text-[11px] text-slate-400" title={getPublicPlayUrl(activity.id)}>
-                    Students: {getPublicPlayUrl(activity.id)}
+              {activity.id && activity.studentCode ? (
+                <div className="px-4 pb-3 pt-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[11px] font-mono font-semibold tracking-wider text-emerald-900">
+                      <KeyRound className="h-3 w-3" aria-hidden />
+                      {activity.studentCode}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(activity.studentCode!);
+                        toast.success('Student code copied');
+                      }}
+                    >
+                      Copy code
+                    </button>
                   </div>
                 </div>
-              )}
+              ) : null}
             </Card>
           ))}
         </div>

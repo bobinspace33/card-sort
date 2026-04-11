@@ -40,7 +40,8 @@ export default function Landing() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-10 bg-[#f5f7f5] px-4 py-12">
+    <div className="flex min-h-screen flex-col bg-[#f5f7f5] px-4 py-12">
+      <div className="flex flex-1 flex-col items-center justify-center gap-10">
       <div className="text-center">
         <h1 className="text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl">Sort-o-Matic 5000</h1>
         <p className="mt-3 max-w-md text-emerald-700/80">Teachers build sorts; students join with a code or link.</p>
@@ -91,6 +92,8 @@ export default function Landing() {
           </Button>
         </div>
       </div>
+      </div>
+      <p className="pb-2 pt-4 text-center text-xs text-slate-400">©Bob Kelly 2026</p>
     </div>
   );
 }
