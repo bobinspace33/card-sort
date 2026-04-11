@@ -12,15 +12,16 @@ import FacilitatorSetup from './pages/FacilitatorSetup';
 import CreateActivity from './pages/CreateActivity';
 import ActivityView from './pages/ActivityView';
 import ActivityResults from './pages/ActivityResults';
-
-const REDIRECT_OK_KEY = 'cardSortGoogleRedirectOk';
-const REDIRECT_ERR_KEY = 'cardSortGoogleRedirectErr';
+import {
+  CARD_SORT_GOOGLE_REDIRECT_ERR,
+  CARD_SORT_GOOGLE_REDIRECT_OK,
+} from './lib/authSessionKeys';
 
 function PostGoogleRedirectToast() {
   useEffect(() => {
-    const errRaw = sessionStorage.getItem(REDIRECT_ERR_KEY);
+    const errRaw = sessionStorage.getItem(CARD_SORT_GOOGLE_REDIRECT_ERR);
     if (errRaw) {
-      sessionStorage.removeItem(REDIRECT_ERR_KEY);
+      sessionStorage.removeItem(CARD_SORT_GOOGLE_REDIRECT_ERR);
       try {
         const { code, message } = JSON.parse(errRaw) as { code: string; message: string };
         const host = window.location.hostname;
@@ -37,8 +38,8 @@ function PostGoogleRedirectToast() {
       }
     }
 
-    if (sessionStorage.getItem(REDIRECT_OK_KEY)) {
-      sessionStorage.removeItem(REDIRECT_OK_KEY);
+    if (sessionStorage.getItem(CARD_SORT_GOOGLE_REDIRECT_OK)) {
+      sessionStorage.removeItem(CARD_SORT_GOOGLE_REDIRECT_OK);
       toast.success('Signed in with Google');
     }
   }, []);

@@ -1,5 +1,6 @@
 import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 import { auth } from '../firebase';
+import { CARD_SORT_LAST_GOOGLE_AUTH_ERR } from './authSessionKeys';
 import { toast } from 'sonner';
 
 function authErrorMessage(code: string, message?: string): string {
@@ -36,7 +37,13 @@ export async function signInWithGoogle(): Promise<void> {
     await signInWithRedirect(auth, provider);
   } catch (error: unknown) {
     const err = error as { code?: string; message?: string };
-    toast.error(authErrorMessage(err.code ?? '', err.message));
+    const code = err.code ?? 'unknown';
+    const message = err.message ?? (error instanceof Error ? error.message : String(error));
+    sessionStorage.setItem(
+      CARD_SORT_LAST_GOOGLE_AUTH_ERR,
+      JSON.stringify({ code, message, at: Date.now() }),
+    );
+    toast.error(authErrorMessage(code, message));
     console.error('Google sign-in error:', error);
   }
 }

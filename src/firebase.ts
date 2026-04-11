@@ -26,6 +26,10 @@ function resolveFirebaseOptions(): FirebaseOptions & { firestoreDatabaseId?: str
 const fullConfig = resolveFirebaseOptions();
 const { firestoreDatabaseId, ...appOptions } = fullConfig;
 const app = initializeApp(appOptions as FirebaseOptions);
+
+/** Shown on sign-in troubleshooting UI so you can confirm the deployed app matches Firebase Console. */
+export const firebaseProjectId = (app.options as FirebaseOptions).projectId ?? '';
+export const firebaseAuthDomain = (app.options as FirebaseOptions).authDomain ?? '';
 export const db =
   firestoreDatabaseId != null && firestoreDatabaseId !== ''
     ? getFirestore(app, firestoreDatabaseId)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, firebaseAuthDomain, firebaseProjectId } from '../firebase';
+import { CARD_SORT_LAST_GOOGLE_AUTH_ERR } from '../lib/authSessionKeys';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Activity } from '../types';
@@ -20,6 +21,8 @@ export default function Home() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   /** True if the activities listener never responded in time (Firestore/network). */
   const [activitiesLoadTimedOut, setActivitiesLoadTimedOut] = useState(false);
+  /** Last Firebase auth error (redirect return or blocked redirect) — shown until dismiss or successful sign-in. */
+  const [lastAuthErr, setLastAuthErr] = useState<{ code: string; message: string } | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -48,9 +51,28 @@ export default function Home() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthReady(true);
+      if (currentUser) {
+        sessionStorage.removeItem(CARD_SORT_LAST_GOOGLE_AUTH_ERR);
+        setLastAuthErr(null);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(CARD_SORT_LAST_GOOGLE_AUTH_ERR);
+    if (!raw) {
+      setLastAuthErr(null);
+      return;
+    }
+    try {
+      const o = JSON.parse(raw) as { code?: string; message?: string };
+      if (typeof o.code === 'string')
+        setLastAuthErr({ code: o.code, message: typeof o.message === 'string' ? o.message : '' });
+    } catch {
+      setLastAuthErr(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -124,6 +146,43 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-stretch gap-4 pt-6">
+            {lastAuthErr && (
+              <div
+                role="alert"
+                className="rounded-2xl border border-red-200 bg-red-50/90 px-4 py-3 text-left text-sm text-red-950"
+              >
+                <p className="font-semibold">Sign-in did not complete</p>
+                <p className="mt-1 font-mono text-xs break-all">
+                  {lastAuthErr.code}: {lastAuthErr.message}
+                </p>
+                <p className="mt-3 text-red-900/90 leading-relaxed">
+                  This build uses Firebase project{' '}
+                  <span className="font-mono font-medium">{firebaseProjectId || '?'}</span>
+                  {firebaseAuthDomain ? (
+                    <>
+                      {' '}
+                      (<span className="font-mono">{firebaseAuthDomain}</span>)
+                    </>
+                  ) : null}
+                  . In the{' '}
+                  <strong>same</strong> project in Firebase Console → Authentication → Settings →{' '}
+                  <strong>Authorized domains</strong>, add exactly:{' '}
+                  <span className="font-mono font-semibold">{typeof window !== 'undefined' ? window.location.hostname : ''}</span>
+                  . If you test a Preview URL, add that hostname too (each{' '}
+                  <code className="rounded bg-white/80 px-1">*.vercel.app</code> preview is separate).
+                </p>
+                <button
+                  type="button"
+                  className="mt-3 text-xs font-medium text-red-800 underline underline-offset-2 hover:text-red-950"
+                  onClick={() => {
+                    sessionStorage.removeItem(CARD_SORT_LAST_GOOGLE_AUTH_ERR);
+                    setLastAuthErr(null);
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             <Button
               onClick={handleLogin}
               className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full px-8 py-6 text-lg shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
