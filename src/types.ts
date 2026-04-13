@@ -7,6 +7,11 @@ export interface CardData {
   correctCategory: string;
 }
 
+/** Flip is only allowed when the card has something to show on the back. */
+export function cardHasFlipBack(card: CardData): boolean {
+  return Boolean(card.backText?.trim()) || Boolean(card.backImage?.trim());
+}
+
 export interface Activity {
   id?: string;
   title: string;

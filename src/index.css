@@ -128,3 +128,66 @@
     @apply font-sans;
     }
 }
+
+/**
+ * Mobile range: wide green pill thumb (WebKit + Firefox).
+ * Native iOS thumb is often a gray circle unless appearance is stripped and thumbs are styled.
+ */
+.range-wide-emerald-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.range-wide-emerald-thumb::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(167 243 208 / 0.9);
+}
+
+.range-wide-emerald-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2.75rem;
+  height: 0.625rem;
+  margin-top: calc((0.5rem - 0.625rem) / 2);
+  border-radius: 0.3125rem;
+  border: 2px solid rgb(6 78 59);
+  background: rgb(16 185 129);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.15);
+  cursor: grab;
+}
+
+.range-wide-emerald-thumb:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+
+.range-wide-emerald-thumb:disabled::-webkit-slider-thumb {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.range-wide-emerald-thumb::-moz-range-track {
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(167 243 208 / 0.9);
+}
+
+.range-wide-emerald-thumb::-moz-range-thumb {
+  width: 2.75rem;
+  height: 0.625rem;
+  border-radius: 0.3125rem;
+  border: 2px solid rgb(6 78 59);
+  background: rgb(16 185 129);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.15);
+  cursor: grab;
+}
+
+.range-wide-emerald-thumb::-moz-range-thumb:active {
+  cursor: grabbing;
+}
+
+.range-wide-emerald-thumb:disabled::-moz-range-thumb {
+  cursor: default;
+  opacity: 0.55;
+}
