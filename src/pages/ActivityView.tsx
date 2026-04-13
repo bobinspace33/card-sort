@@ -430,7 +430,8 @@ export default function ActivityView() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } })
+    // Touch: distance-based activation (no long-press); matches pointer so cards drag immediately after a small move.
+    useSensor(TouchSensor, { activationConstraint: { distance: 5 } })
   );
 
   /** Must run every render (before any conditional return) — used only on the play screen. */
