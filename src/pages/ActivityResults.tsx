@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType, auth } from '../firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { Activity, Response } from '../types';
 import { getPublicPlayUrl } from '../lib/activityUrls';
 import { EDITOR_PATH } from '../lib/paths';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, CheckCircle, Copy } from 'lucide-react';
+import { ArrowLeft, Users, CheckCircle, Copy, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const FIRESTORE_BATCH_LIMIT = 500;
 
 export default function ActivityResults() {
   const { activityId } = useParams();
@@ -18,6 +28,8 @@ export default function ActivityResults() {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [responses, setResponses] = useState<Response[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,6 +79,30 @@ export default function ActivityResults() {
     };
     fetchData();
   }, [activityId, navigate]);
+
+  const handleClearAllResponses = async () => {
+    if (!activityId || responses.length === 0) return;
+    setClearing(true);
+    try {
+      const responsesRef = collection(db, `activities/${activityId}/responses`);
+      const responsesSnap = await getDocs(responsesRef);
+      const docs = responsesSnap.docs;
+      for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_LIMIT) {
+        const batch = writeBatch(db);
+        for (const d of docs.slice(i, i + FIRESTORE_BATCH_LIMIT)) {
+          batch.delete(d.ref);
+        }
+        await batch.commit();
+      }
+      setResponses([]);
+      setClearDialogOpen(false);
+      toast.success('All response data cleared');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `activities/${activityId}/responses`);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const copyLink = () => {
     if (!activityId) return;
@@ -131,6 +167,17 @@ export default function ActivityResults() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {responses.length > 0 ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => setClearDialogOpen(true)}
+              disabled={clearing}
+              className="rounded-full"
+            >
+              <Trash2 className="w-4 h-4 mr-2" /> Clear all responses
+            </Button>
+          ) : null}
           {activity.studentCode ? (
             <Button
               onClick={copyStudentCode}
@@ -292,6 +339,39 @@ export default function ActivityResults() {
 
         </div>
       )}
+
+      <Dialog open={clearDialogOpen} onOpenChange={(open) => !clearing && setClearDialogOpen(open)}>
+        <DialogContent className="rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clear all response data?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes every completed submission for this activity from the database (
+              {responses.length} response{responses.length === 1 ? '' : 's'}). Student names, scores, and
+              placements cannot be recovered.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setClearDialogOpen(false)}
+              disabled={clearing}
+              className="rounded-full"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleClearAllResponses()}
+              disabled={clearing}
+              className="rounded-full"
+            >
+              {clearing ? 'Clearing…' : 'Clear all'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
