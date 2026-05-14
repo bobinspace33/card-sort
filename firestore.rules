@@ -20,6 +20,8 @@ service cloud.firestore {
     //       - correctCategory: string (max 50 chars)
     //   - checkAnswers: boolean (required)
     //   - showScore: boolean (required)
+    //   - scoredSort: boolean (optional; default true when absent)
+    //   - showPlacementBreakdown: boolean (optional)
     //   - backgroundImage: string (optional, max 2000 chars, URL — may be empty)
     //   - studentCode: string (optional on legacy docs; if present, exactly 6 chars A–Z / 0–9)
     //   - ownerId: string (required, immutable)
@@ -76,15 +78,22 @@ service cloud.firestore {
          data.studentCode.matches('^[A-Z0-9]{6}$'));
     }
 
+    function optionalBoolFieldOk(field) {
+      let data = request.resource.data;
+      return !data.keys().hasAll([field]) || data[field] is bool;
+    }
+
     function isValidActivity() {
       let data = request.resource.data;
       return hasRequiredFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'ownerId', 'createdAt', 'backgroundImage']) &&
-             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'backgroundImage', 'ownerId', 'createdAt', 'studentCode']) &&
+             hasOnlyAllowedFields(['title', 'categories', 'cards', 'checkAnswers', 'showScore', 'scoredSort', 'showPlacementBreakdown', 'backgroundImage', 'ownerId', 'createdAt', 'studentCode']) &&
              isValidString(data.title, 1, 100) &&
              data.categories is list && data.categories.size() <= 20 &&
              data.cards is list && data.cards.size() <= 100 &&
              data.checkAnswers is bool &&
              data.showScore is bool &&
+             optionalBoolFieldOk('scoredSort') &&
+             optionalBoolFieldOk('showPlacementBreakdown') &&
              data.backgroundImage is string && data.backgroundImage.size() <= 2000 &&
              data.ownerId is string &&
              data.createdAt is timestamp &&

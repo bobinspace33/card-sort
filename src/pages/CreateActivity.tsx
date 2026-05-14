@@ -26,6 +26,8 @@ export default function CreateActivity() {
   const [cards, setCards] = useState<CardData[]>([]);
   const [checkAnswers, setCheckAnswers] = useState(true);
   const [showScore, setShowScore] = useState(true);
+  const [scoredSort, setScoredSort] = useState(true);
+  const [showPlacementBreakdown, setShowPlacementBreakdown] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState('');
   const [bulkCardCount, setBulkCardCount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -85,8 +87,11 @@ export default function CreateActivity() {
             correctCategory: typeof c.correctCategory === 'string' ? c.correctCategory : firstCat,
           })),
         );
-        setCheckAnswers(Boolean(data.checkAnswers));
-        setShowScore(Boolean(data.showScore));
+        const nextScored = data.scoredSort !== false;
+        setScoredSort(nextScored);
+        setCheckAnswers(nextScored ? Boolean(data.checkAnswers) : false);
+        setShowScore(nextScored ? Boolean(data.showScore) : false);
+        setShowPlacementBreakdown(Boolean(data.showPlacementBreakdown));
         setBackgroundImage(typeof data.backgroundImage === 'string' ? data.backgroundImage : '');
         setEditCreatedAt(data.createdAt);
         setEditOwnerId(typeof data.ownerId === 'string' ? data.ownerId : null);
@@ -276,8 +281,10 @@ export default function CreateActivity() {
           title,
           categories,
           cards,
-          checkAnswers,
-          showScore,
+          checkAnswers: scoredSort ? checkAnswers : false,
+          showScore: scoredSort ? showScore : false,
+          scoredSort,
+          showPlacementBreakdown,
           backgroundImage: backgroundImage.trim(),
           studentCode: sc,
         });
@@ -291,8 +298,10 @@ export default function CreateActivity() {
         title,
         categories,
         cards,
-        checkAnswers,
-        showScore,
+        checkAnswers: scoredSort ? checkAnswers : false,
+        showScore: scoredSort ? showScore : false,
+        scoredSort,
+        showPlacementBreakdown,
         backgroundImage: backgroundImage.trim(),
         ownerId: auth.currentUser.uid,
         createdAt: serverTimestamp(),
@@ -403,20 +412,58 @@ export default function CreateActivity() {
             
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
               <div className="space-y-0.5">
-                <Label>Check Answers</Label>
-                <p className="text-sm text-slate-500">Allow students to see if they are correct</p>
+                <Label>Scored sort</Label>
+                <p className="text-sm text-slate-500">
+                  Turn off for open sorts with no “correct” category. Placement data is still saved; scores stay at 0.
+                </p>
               </div>
-              <Switch checked={checkAnswers} onCheckedChange={setCheckAnswers} />
+              <Switch
+                checked={scoredSort}
+                onCheckedChange={(on) => {
+                  setScoredSort(on);
+                  if (!on) {
+                    setCheckAnswers(false);
+                    setShowScore(false);
+                  }
+                }}
+              />
             </div>
 
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
               <div className="space-y-0.5">
-                <Label>Show class results</Label>
+                <Label>Check Answers</Label>
+                <p className="text-sm text-slate-500">Allow students to see if they are correct</p>
+              </div>
+              <Switch
+                checked={checkAnswers}
+                disabled={!scoredSort}
+                onCheckedChange={setCheckAnswers}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+              <div className="space-y-0.5">
+                <Label>Show class results (% correct)</Label>
                 <p className="text-sm text-slate-500">
-                  After submit, show a bar for each card with the % of the class who placed it correctly
+                  After submit, show the % of the class who placed each card in the correct category
                 </p>
               </div>
-              <Switch checked={showScore} onCheckedChange={setShowScore} />
+              <Switch
+                checked={showScore}
+                disabled={!scoredSort}
+                onCheckedChange={setShowScore}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+              <div className="space-y-0.5">
+                <Label>Show class placement by category</Label>
+                <p className="text-sm text-slate-500">
+                  After submit, show how the class split each card across categories (updates live as more students
+                  finish). Works for scored and unscored sorts.
+                </p>
+              </div>
+              <Switch checked={showPlacementBreakdown} onCheckedChange={setShowPlacementBreakdown} />
             </div>
           </CardContent>
         </Card>
@@ -580,18 +627,24 @@ export default function CreateActivity() {
                   </TabsContent>
                 </Tabs>
 
-                <div className="mt-6 space-y-2">
-                  <Label>Correct Category</Label>
-                  <select
-                    className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={card.correctCategory}
-                    onChange={(e) => handleUpdateCard(card.id, 'correctCategory', e.target.value)}
-                  >
-                    {categories.map((cat, i) => (
-                      <option key={i} value={cat}>{cat || `Category ${i + 1}`}</option>
-                    ))}
-                  </select>
-                </div>
+                {scoredSort ? (
+                  <div className="mt-6 space-y-2">
+                    <Label>Correct Category</Label>
+                    <select
+                      className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={card.correctCategory}
+                      onChange={(e) => handleUpdateCard(card.id, 'correctCategory', e.target.value)}
+                    >
+                      {categories.map((cat, i) => (
+                        <option key={i} value={cat}>{cat || `Category ${i + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="mt-6 text-sm text-slate-500">
+                    Open sort — no correct category is stored for analytics.
+                  </p>
+                )}
                 {isLast && (
                   <div className="mt-6 pt-5 border-t border-slate-200/90">
                     <Button

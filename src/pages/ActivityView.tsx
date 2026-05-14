@@ -2,8 +2,14 @@ import React, { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useR
 import { createPortal } from 'react-dom';
 import { useLocation, useParams } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, getDoc, getDocs, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, addDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { Activity, CardData, cardHasFlipBack } from '../types';
+import {
+  computeClassPlacementByCard,
+  isScoredSort,
+  type CardPlacementBreakdownRow,
+} from '../lib/classPlacementBreakdown';
+import { ClassPlacementBreakdownList } from '@/components/ClassPlacementBreakdownList';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor, TouchSensor } from '@dnd-kit/core';
 import { useDroppable } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
@@ -694,8 +700,9 @@ export default function ActivityView() {
   const [showResultDialog, setShowResultDialog] = useState(false);
   const [resultData, setResultData] = useState<{
     incorrectCount: number;
-    /** Per-card class % correct (same order as activity.cards); null if not loaded or showScore off */
+    /** Per-card class % correct; only when scored sort + showScore and placement breakdown is off */
     cardClassPercents: { cardId: string; label: string; percent: number }[] | null;
+    placementBreakdown: CardPlacementBreakdownRow[] | null;
   } | null>(null);
 
   const sensors = useSensors(
@@ -743,6 +750,32 @@ export default function ActivityView() {
     };
     fetchActivity();
   }, [activityId]);
+
+  useEffect(() => {
+    if (!showResultDialog || !activity?.id || !activity.showPlacementBreakdown) return;
+    const col = collection(db, `activities/${activity.id}/responses`);
+    const unsubscribe = onSnapshot(
+      col,
+      (snap) => {
+        const resps = snap.docs.map((d) => d.data() as { placements?: Record<string, string> });
+        const placementBreakdown = computeClassPlacementByCard(activity.categories, activity.cards, resps);
+        setResultData((prev) =>
+          prev
+            ? { ...prev, placementBreakdown }
+            : {
+                incorrectCount: 0,
+                cardClassPercents: null,
+                placementBreakdown,
+              },
+        );
+      },
+      (error) => {
+        console.error('responses snapshot', error);
+        toast.error('Could not keep class results up to date');
+      },
+    );
+    return () => unsubscribe();
+  }, [showResultDialog, activity]);
 
   /** Mobile play: lock document scroll/bounce/pull-refresh; discourage pinch & long-press zoom while sorting. */
   useEffect(() => {
@@ -871,18 +904,18 @@ export default function ActivityView() {
       return;
     }
 
-    let correctCount = 0;
+    const scored = isScoredSort(activity);
     let incorrectCount = 0;
 
-    activity.cards.forEach((card) => {
-      if (placements[card.id] === card.correctCategory) {
-        correctCount++;
-      } else {
-        incorrectCount++;
-      }
-    });
+    if (scored) {
+      activity.cards.forEach((card) => {
+        if (placements[card.id] !== card.correctCategory) {
+          incorrectCount++;
+        }
+      });
+    }
 
-    const score = Math.round((correctCount / activity.cards.length) * 100);
+    const score = scored ? Math.round(((activity.cards.length - incorrectCount) / activity.cards.length) * 100) : 0;
 
     responseSubmitLockRef.current = true;
     setIsGatheringClassData(true);
@@ -894,12 +927,15 @@ export default function ActivityView() {
         submittedAt: serverTimestamp(),
       });
 
+      const resCol = collection(db, `activities/${activity.id}/responses`);
+      const snap = await getDocs(resCol);
+      const resps = snap.docs.map((d) => d.data() as { placements?: Record<string, string> });
+      const n = resps.length;
+
+      const showCorrectBars = scored && activity.showScore && !activity.showPlacementBreakdown;
       let cardClassPercents: { cardId: string; label: string; percent: number }[] | null = null;
-      if (activity.showScore) {
+      if (showCorrectBars) {
         try {
-          const snap = await getDocs(collection(db, `activities/${activity.id}/responses`));
-          const resps = snap.docs.map((d) => d.data() as { placements?: Record<string, string> });
-          const n = resps.length;
           if (n > 0) {
             cardClassPercents = activity.cards.map((card) => {
               const ok = resps.filter((r) => r.placements?.[card.id] === card.correctCategory).length;
@@ -918,7 +954,11 @@ export default function ActivityView() {
         }
       }
 
-      setResultData({ incorrectCount, cardClassPercents });
+      const placementBreakdown = activity.showPlacementBreakdown
+        ? computeClassPlacementByCard(activity.categories, activity.cards, resps)
+        : null;
+
+      setResultData({ incorrectCount, cardClassPercents, placementBreakdown });
       setShowResultDialog(true);
     } catch (error) {
       swipeAutoSubmitLockRef.current = false;
@@ -1371,11 +1411,11 @@ export default function ActivityView() {
           <DialogHeader>
             <DialogTitle className="text-2xl text-center">Activity Complete!</DialogTitle>
             <DialogDescription className="text-center text-lg pt-4">
-              {activity.checkAnswers && resultData && resultData.incorrectCount > 0 ? (
+              {activity.checkAnswers && isScoredSort(activity) && resultData && resultData.incorrectCount > 0 ? (
                 <span className="text-amber-600 font-medium">
                   You have {resultData.incorrectCount} incorrect card{resultData.incorrectCount > 1 ? 's' : ''}.
                 </span>
-              ) : activity.checkAnswers && resultData && resultData.incorrectCount === 0 ? (
+              ) : activity.checkAnswers && isScoredSort(activity) && resultData && resultData.incorrectCount === 0 ? (
                 <span className="text-emerald-600 font-medium">
                   Perfect! All cards are in the correct category.
                 </span>
@@ -1384,8 +1424,26 @@ export default function ActivityView() {
               )}
             </DialogDescription>
           </DialogHeader>
-          
-          {activity.showScore && resultData?.cardClassPercents && resultData.cardClassPercents.length > 0 && (
+
+          {activity.showPlacementBreakdown && resultData?.placementBreakdown && resultData.placementBreakdown.length > 0 ? (
+            <div className="max-h-[min(52vh,28rem)] space-y-2 overflow-y-auto py-4 pr-1">
+              <p className="text-center text-sm font-medium text-slate-600">
+                Class placement — how everyone sorted each card
+              </p>
+              <p className="text-center text-xs text-slate-500">Updates live as more responses come in.</p>
+              <ClassPlacementBreakdownList
+                categoryOrder={activity.categories}
+                rows={resultData.placementBreakdown}
+                listLabel="Class placement by card"
+              />
+            </div>
+          ) : null}
+
+          {isScoredSort(activity) &&
+          activity.showScore &&
+          !activity.showPlacementBreakdown &&
+          resultData?.cardClassPercents &&
+          resultData.cardClassPercents.length > 0 ? (
             <div className="max-h-[min(52vh,28rem)] space-y-3 overflow-y-auto py-4 pr-1">
               <p className="text-center text-sm font-medium text-slate-600">
                 Class results — % who placed each card correctly
@@ -1409,10 +1467,14 @@ export default function ActivityView() {
                 ))}
               </ul>
             </div>
-          )}
-          {activity.showScore && resultData?.cardClassPercents && resultData.cardClassPercents.length === 0 && (
+          ) : null}
+          {isScoredSort(activity) &&
+          activity.showScore &&
+          !activity.showPlacementBreakdown &&
+          resultData?.cardClassPercents &&
+          resultData.cardClassPercents.length === 0 ? (
             <p className="py-4 text-center text-sm text-slate-500">No class data yet.</p>
-          )}
+          ) : null}
 
           <DialogFooter className="sm:justify-center">
             <Button

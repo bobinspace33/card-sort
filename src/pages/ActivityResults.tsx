@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType, auth } from '../firebase';
 import { collection, getDocs, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { Activity, Response } from '../types';
+import { computeClassPlacementByCard, isScoredSort } from '../lib/classPlacementBreakdown';
+import { ClassPlacementBreakdownList } from '@/components/ClassPlacementBreakdownList';
 import { getPublicPlayUrl } from '../lib/activityUrls';
 import { EDITOR_PATH } from '../lib/paths';
 import { Button } from '@/components/ui/button';
@@ -118,7 +120,7 @@ export default function ActivityResults() {
   };
 
   const perCardClassStats = useMemo(() => {
-    if (!activity || responses.length === 0) return [];
+    if (!activity || responses.length === 0 || !isScoredSort(activity)) return [];
     const n = responses.length;
     return activity.cards.map((card) => {
       const ok = responses.filter((r) => r.placements?.[card.id] === card.correctCategory).length;
@@ -130,8 +132,21 @@ export default function ActivityResults() {
     });
   }, [activity, responses]);
 
+  const perCardPlacementBreakdown = useMemo(() => {
+    if (!activity || responses.length === 0 || !activity.showPlacementBreakdown) return null;
+    return computeClassPlacementByCard(
+      activity.categories,
+      activity.cards,
+      responses.map((r) => ({ placements: r.placements })),
+    );
+  }, [activity, responses]);
+
   if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (!activity) return <div className="p-8 text-center">Activity not found</div>;
+
+  const scoredActivity = isScoredSort(activity);
+  const showAccuracyTab = scoredActivity;
+  const showPlacementTab = Boolean(activity.showPlacementBreakdown);
 
   // Prepare chart data
   const scoreDistribution = [
@@ -207,35 +222,64 @@ export default function ActivityResults() {
           
           <div className="lg:col-span-2">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="mb-6 w-full max-w-md">
+              <TabsList className="mb-6 flex w-full max-w-xl flex-wrap gap-1">
                 <TabsTrigger value="overview" className="rounded-lg">
                   Overview
                 </TabsTrigger>
-                <TabsTrigger value="by-card" className="rounded-lg">
-                  By card
-                </TabsTrigger>
+                {showAccuracyTab ? (
+                  <TabsTrigger value="by-card" className="rounded-lg">
+                    Accuracy
+                  </TabsTrigger>
+                ) : null}
+                {showPlacementTab ? (
+                  <TabsTrigger value="placement" className="rounded-lg">
+                    Category placement
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
 
               <TabsContent value="overview" className="mt-0 space-y-8">
                 <Card className="rounded-3xl border-0 shadow-sm bg-white overflow-hidden">
                   <CardHeader className="bg-emerald-50/50 border-b border-emerald-50">
-                    <CardTitle className="text-xl text-emerald-900">Score Distribution</CardTitle>
+                    <CardTitle className="text-xl text-emerald-900">
+                      {scoredActivity ? 'Score Distribution' : 'Responses'}
+                    </CardTitle>
+                    {!scoredActivity ? (
+                      <p className="text-sm text-slate-600 mt-1">
+                        Open sort — scores are not computed.
+                        {showPlacementTab ? ' Use the Category placement tab for how the class sorted each card.' : null}
+                      </p>
+                    ) : null}
                   </CardHeader>
                   <CardContent className="p-6">
-                    <div className="h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={scoreDistribution} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                          <XAxis dataKey="range" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                          <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                          <Tooltip 
-                            cursor={{ fill: '#f1f5f9' }}
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                          />
-                          <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    {scoredActivity ? (
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={scoreDistribution} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="range" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
+                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
+                            <Tooltip 
+                              cursor={{ fill: '#f1f5f9' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <p className="py-8 text-center text-slate-600">
+                        No score histogram for open sorts — see student responses below
+                        {showPlacementTab ? (
+                          <>
+                            {' '}
+                            or open <span className="font-medium text-emerald-800">Category placement</span>.
+                          </>
+                        ) : (
+                          '.'
+                        )}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -255,7 +299,9 @@ export default function ActivityResults() {
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <p className="text-2xl font-light text-emerald-600">{resp.score}%</p>
+                              <p className="text-2xl font-light text-emerald-600">
+                                {scoredActivity ? `${resp.score}%` : '—'}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -265,36 +311,59 @@ export default function ActivityResults() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="by-card" className="mt-0">
-                <Card className="rounded-3xl border-0 shadow-sm bg-white overflow-hidden">
-                  <CardHeader className="border-b border-emerald-50 bg-emerald-50/50">
-                    <CardTitle className="text-xl text-emerald-900">Class accuracy by card</CardTitle>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Share of responses that placed each card in the correct category (label = front text).
-                    </p>
-                  </CardHeader>
-                  <CardContent className="max-h-[min(70vh,36rem)] overflow-y-auto p-6">
-                    <ul className="space-y-4">
-                      {perCardClassStats.map((row) => (
-                        <li key={row.cardId}>
-                          <div className="mb-1 flex items-baseline justify-between gap-2 text-xs text-slate-600 sm:text-sm">
-                            <span className="min-w-0 truncate font-medium text-slate-800" title={row.label}>
-                              {row.label}
-                            </span>
-                            <span className="shrink-0 tabular-nums text-slate-500">{row.percent}%</span>
-                          </div>
-                          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-emerald-500 transition-all"
-                              style={{ width: `${row.percent}%` }}
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+              {showAccuracyTab ? (
+                <TabsContent value="by-card" className="mt-0">
+                  <Card className="rounded-3xl border-0 shadow-sm bg-white overflow-hidden">
+                    <CardHeader className="border-b border-emerald-50 bg-emerald-50/50">
+                      <CardTitle className="text-xl text-emerald-900">Class accuracy by card</CardTitle>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Share of responses that placed each card in the correct category (label = front text).
+                      </p>
+                    </CardHeader>
+                    <CardContent className="max-h-[min(70vh,36rem)] overflow-y-auto p-6">
+                      <ul className="space-y-4">
+                        {perCardClassStats.map((row) => (
+                          <li key={row.cardId}>
+                            <div className="mb-1 flex items-baseline justify-between gap-2 text-xs text-slate-600 sm:text-sm">
+                              <span className="min-w-0 truncate font-medium text-slate-800" title={row.label}>
+                                {row.label}
+                              </span>
+                              <span className="shrink-0 tabular-nums text-slate-500">{row.percent}%</span>
+                            </div>
+                            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-emerald-500 transition-all"
+                                style={{ width: `${row.percent}%` }}
+                              />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              ) : null}
+
+              {showPlacementTab && perCardPlacementBreakdown ? (
+                <TabsContent value="placement" className="mt-0">
+                  <Card className="rounded-3xl border-0 shadow-sm bg-white overflow-hidden">
+                    <CardHeader className="border-b border-emerald-50 bg-emerald-50/50">
+                      <CardTitle className="text-xl text-emerald-900">Class placement by category</CardTitle>
+                      <p className="text-sm text-slate-600 mt-1">
+                        For each card, the share of the class that placed it in each category (same as student
+                        modal when enabled).
+                      </p>
+                    </CardHeader>
+                    <CardContent className="max-h-[min(70vh,36rem)] overflow-y-auto p-6">
+                      <ClassPlacementBreakdownList
+                        categoryOrder={activity.categories}
+                        rows={perCardPlacementBreakdown}
+                        listLabel="Placement by card"
+                      />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              ) : null}
             </Tabs>
           </div>
 
@@ -302,8 +371,19 @@ export default function ActivityResults() {
             <Card className="rounded-3xl border-0 shadow-sm bg-emerald-500 text-white">
               <CardContent className="p-8 text-center">
                 <CheckCircle className="w-12 h-12 text-emerald-200 mx-auto mb-4" />
-                <div className="text-6xl font-light mb-2">{averageScore}%</div>
-                <div className="text-emerald-100 font-medium uppercase tracking-wider text-sm">Average Score</div>
+                {scoredActivity ? (
+                  <>
+                    <div className="text-6xl font-light mb-2">{averageScore}%</div>
+                    <div className="text-emerald-100 font-medium uppercase tracking-wider text-sm">Average Score</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl font-medium mb-2 leading-snug">Open sort</div>
+                    <div className="text-emerald-100 text-sm leading-relaxed">
+                      Average score is not shown when there is no correct answer key.
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
             
@@ -329,8 +409,10 @@ export default function ActivityResults() {
                 <div>
                   <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold mb-1">Settings</p>
                   <ul className="text-sm text-slate-700 space-y-1">
+                    <li>Scored sort: {scoredActivity ? 'Yes' : 'No'}</li>
                     <li>Check Answers: {activity.checkAnswers ? 'Yes' : 'No'}</li>
-                    <li>Show class results (students): {activity.showScore ? 'Yes' : 'No'}</li>
+                    <li>Show % correct to students: {activity.showScore ? 'Yes' : 'No'}</li>
+                    <li>Show category placement to students: {activity.showPlacementBreakdown ? 'Yes' : 'No'}</li>
                   </ul>
                 </div>
               </CardContent>
